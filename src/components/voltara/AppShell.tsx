@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { cloudConfigured, getCloudClient } from "@/lib/voltara/cloud-client";
 import { findMyHousehold, startHouseholdSync, getCloudStatus, useCloudStatus } from "@/lib/voltara/cloud-sync";
 import { useHydrated } from "@tanstack/react-router";
-import { CalendarClock, FlaskConical, Droplets, Gauge, House, Menu, Plug, Receipt, Settings, Users, Wallet } from "lucide-react";
+import { startVoltaraPwa } from "@/lib/voltara/pwa";
+import { CalendarClock, Download, FlaskConical, Droplets, Gauge, House, Menu, Plug, Receipt, Settings, Users, Wallet } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +19,7 @@ const NAV = [
   { to: "/simulador", label: "Simular", icon: FlaskConical },
   { to: "/configuracoes", label: "Ajustes", icon: Settings },
   { to: "/compartilhar", label: "Compartilhar", icon: Users },
+  { to: "/instalar", label: "Instalar app", icon: Download },
 ] as const;
 
 /** Reconecta à casa em qualquer tela, inclusive ao abrir /gastos diretamente. */
@@ -76,6 +78,9 @@ export function AppShell() {
   const sync = useCloudStatus();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const MOBILE_NAV = NAV.slice(0, 3);
+  useEffect(() => {
+    if (hydrated) startVoltaraPwa();
+  }, [hydrated]);
   return (
     <div className="min-h-screen min-w-0 bg-background">
       <FamilyAutoConnect />
