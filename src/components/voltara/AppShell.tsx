@@ -1,7 +1,7 @@
 import { Link, Outlet } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { cloudConfigured, getCloudClient } from "@/lib/voltara/cloud-client";
-import { findMyHousehold, startHouseholdSync, getCloudStatus } from "@/lib/voltara/cloud-sync";
+import { findMyHousehold, startHouseholdSync, getCloudStatus, useCloudStatus } from "@/lib/voltara/cloud-sync";
 import { useHydrated } from "@tanstack/react-router";
 import { CalendarClock, FlaskConical, Gauge, Plug, Receipt, Settings, Users, Wallet, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -66,6 +66,7 @@ function Logo() {
 
 export function AppShell() {
   const hydrated = useHydrated();
+  const sync = useCloudStatus();
   return (
     <div className="min-h-screen bg-background">
       <FamilyAutoConnect />
@@ -84,7 +85,7 @@ export function AppShell() {
             </Link>
           ))}
         </nav>
-        <p className="mt-auto hidden px-2 text-[11px] leading-snug text-muted-foreground lg:block">Dados salvos só neste navegador.</p>
+        <p className="mt-auto hidden px-2 text-[11px] leading-snug text-muted-foreground lg:block">{sync.phase === "online" ? "Casa compartilhada: sincronização ativa." : sync.phase === "error" ? "Sincronização interrompida. Abra Compartilhar." : "Modo local. Entre em Compartilhar para sincronizar."}</p>
       </aside>
 
       <header className="sticky top-0 z-20 flex items-center justify-between border-b bg-background/85 px-4 py-3 backdrop-blur md:hidden">
