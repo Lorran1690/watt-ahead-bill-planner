@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getCloudClient } from "./cloud-client";
-import { PUBLIC_SHARING_URL } from "./public-url";
+import { PUBLIC_APP_ORIGIN, PUBLIC_SHARING_URL } from "./public-url";
+import { parseVoltaraConfirmationLink } from "./auth-link";
 import { diffSharedRecords, fromSharedRecords, toSharedRecords, type SharedRecord } from "./cloud-records";
 import { defaultState } from "./defaults";
 import { getVoltaraSnapshot, setVoltara, subscribeVoltara } from "./store";
@@ -59,6 +60,9 @@ export async function signedInEmail(): Promise<string | null> {
 
 export async function sendSignInEmail(email: string): Promise<void> {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) throw new Error("Informe um e-mail válido.");
+  if (typeof window !== "undefined" && window.location.origin !== PUBLIC_APP_ORIGIN && !import.meta.env.DEV) {
+    throw new Error("Esta é a prévia do editor. Abra o site público do Voltara antes de pedir o e-mail de acesso.");
+  }
   const client = assertBrowser();
   const { error } = await client.auth.signInWithOtp({
     email: email.trim(),
@@ -66,6 +70,20 @@ export async function sendSignInEmail(email: string): Promise<void> {
     options: { emailRedirectTo: PUBLIC_SHARING_URL },
   });
   if (error) throw error;
+}
+
+/** Recupera uma sessão diretamente no domínio público, sem abrir o editor do Lovable.
+ * A confirmação deve ser copiada antes do clique, pois cada token é de uso único.
+ */
+export async function signInWithCopiedEmailLink(link: string): Promise<void> {
+  if (typeof window !== "undefined" && window.location.origin !== PUBLIC_APP_ORIGIN && !import.meta.env.DEV) {
+    throw new Error("Abra o Voltara público para confirmar o acesso. Não utilize a prévia do editor.");
+  }
+  const confirmation = parseVoltaraConfirmationLink(link);
+  if (!confirmation) throw new Error("Copie o endereço completo do botão de confirmação recebido no e-mail do Supabase, sem clicar nele primeiro.");
+  const { data, error } = await assertBrowser().auth.verifyOtp(confirmation);
+  if (error) throw error;
+  if (!data.session) throw new Error("O link não gerou uma sessão. Solicite um novo e-mail de acesso.");
 }
 
 export async function findMyHousehold(): Promise<{ id: string; role: "owner" | "member" } | null> {
