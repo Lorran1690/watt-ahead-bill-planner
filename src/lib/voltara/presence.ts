@@ -61,7 +61,7 @@ export function startFamilyPresence(householdId: string | null): () => void {
     if (!active || busy || document.visibilityState !== "visible") return;
     busy = true;
     try {
-      if (state.enabled && Date.now() - lastSent >= 18000) {
+      if (state.enabled && Date.now() - lastSent >= 12000) {
         const { error } = await client!.rpc("voltara_presence_touch");
         if (error) throw error;
         lastSent = Date.now();
@@ -74,6 +74,7 @@ export function startFamilyPresence(householdId: string | null): () => void {
     } finally { busy = false; }
   }
   const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
+  const onOffline = () => { if (active) publish({ error: "Sem conexão. Presença indisponível." }); };
   const onStorage = (event: StorageEvent) => {
     if (active && preferenceKey && event.key === preferenceKey) {
       publish({ enabled: event.newValue === "yes" });
@@ -90,11 +91,12 @@ export function startFamilyPresence(householdId: string | null): () => void {
       try { enabled = window.localStorage.getItem(preferenceKey) === "yes"; } catch { /* opt-in inicial */ }
       publish({ enabled, ready: true });
       wake = () => { void refresh(); };
-      // A single loop polls every 15s. Heartbeat is rate-limited, sent on alternate
-      // ticks (about 30 seconds) and immediately when visible if needed.
+      // One loop polls and sends a heartbeat every 15s when presence is enabled.
+      // The server independently rate-limits writes to one per 10 seconds.
       timer = window.setInterval(() => { void refresh(); }, 15000);
       document.addEventListener("visibilitychange", onVisible);
       window.addEventListener("online", onVisible);
+      window.addEventListener("offline", onOffline);
       window.addEventListener("storage", onStorage);
       await refresh();
     } catch {
@@ -107,6 +109,7 @@ export function startFamilyPresence(householdId: string | null): () => void {
     if (timer !== undefined) window.clearInterval(timer);
     document.removeEventListener("visibilitychange", onVisible);
     window.removeEventListener("online", onVisible);
+    window.removeEventListener("offline", onOffline);
     window.removeEventListener("storage", onStorage);
     preferenceKey = null;
     wake = null;
