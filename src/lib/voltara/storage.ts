@@ -1,5 +1,5 @@
 import { defaultState } from "./defaults";
-import type { Appliance, Bill, DailyExpense, Settings, VoltaraState } from "./types";
+import type { Appliance, Bill, DailyExpense, Settings, VoltaraState, WaterBill } from "./types";
 import { isHouseRoom } from "./rooms";
 
 export const STORAGE_KEY = "voltara:v1";
@@ -58,6 +58,20 @@ function assertBill(raw: unknown): Bill {
   return raw as unknown as Bill;
 }
 
+function assertWaterBill(raw: unknown): WaterBill {
+  if (!isObj(raw) || !validName(raw.id, 80) || !validMonth(raw.month) ||
+    !validNumber(raw.value, 0.01, 1_000_000) ||
+    (raw.m3 !== undefined && !validNumber(raw.m3, 0.01, 1_000_000)) ||
+    (raw.note !== undefined && (typeof raw.note !== "string" || raw.note.length > 240))) {
+    throw new Error("Conta de água inválida.");
+  }
+  return {
+    id: raw.id, month: raw.month, value: raw.value,
+    ...(raw.m3 === undefined ? {} : { m3: raw.m3 }),
+    ...(raw.note === undefined ? {} : { note: raw.note }),
+  };
+}
+
 function assertExpense(raw: unknown): DailyExpense {
   if (!isObj(raw)) throw new Error("Lançamento de gasto inválido.");
   // Compatibilidade com a primeira planta de demonstração de 6 ambientes.
@@ -94,16 +108,21 @@ export function normalizeState(raw: unknown): VoltaraState {
   }
 
   if (raw.appliances.length > 100 || raw.bills.length > 240 ||
+      (raw.waterBills !== undefined && (!Array.isArray(raw.waterBills) || raw.waterBills.length > 240)) ||
       (raw.expenses !== undefined && (!Array.isArray(raw.expenses) || raw.expenses.length > 10000))) {
     throw new Error("Backup excede o limite de registros.");
   }
   const appliances = raw.appliances.map(assertAppliance);
   const bills = raw.bills.map(assertBill);
+  // Versões anteriores podem não ter registros de contas de água.
+  const waterBills = raw.waterBills === undefined ? [] : (raw.waterBills as unknown[]).map(assertWaterBill);
   // Backups antigos (v1) não possuem gastos; manter compatibilidade sem perder dados.
   const expenses = raw.expenses === undefined ? [] : (raw.expenses as unknown[]).map(assertExpense);
   if (new Set(appliances.map((a) => a.id)).size !== appliances.length ||
       appliances.some((a) => a.id === "outros") ||
       new Set(bills.map((b) => b.month)).size !== bills.length ||
+      new Set(waterBills.map((b) => b.month)).size !== waterBills.length ||
+      new Set(waterBills.map((b) => b.id)).size !== waterBills.length ||
       new Set(expenses.map((e) => e.id)).size !== expenses.length) {
     throw new Error("Backup com aparelhos ou faturas duplicados.");
   }
@@ -112,7 +131,7 @@ export function normalizeState(raw: unknown): VoltaraState {
   if (!validNumber(residualUncertainty, 0, 1)) {
     throw new Error("Incerteza residual inválida.");
   }
-  return { version: 1, settings, appliances, bills, expenses, residualUncertainty };
+  return { version: 1, settings, appliances, bills, waterBills, expenses, residualUncertainty };
 }
 
 export function loadState(kv: KV | null): VoltaraState {
