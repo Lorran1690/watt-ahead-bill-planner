@@ -69,6 +69,7 @@ export function defaultState(): VoltaraState {
     },
     appliances: defaultAppliances(),
     bills: [],
+    waterBills: [],
     expenses: [],
     residualUncertainty: 0.25,
   };
