@@ -164,14 +164,14 @@ function SharePage() {
         <>
           <Panel>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 {status.phase === "online" ? <Cloud className="size-6 text-success" /> : <CloudOff className="size-6 text-muted-foreground" />}
-                <div>
-                  <p className="font-semibold">{status.phase === "online" ? "Sincronização conectada" :
+                <div className="min-w-0">
+                  <p className="break-words font-semibold">{status.phase === "online" ? "Sincronização conectada" :
                     status.phase === "connecting" ? "Conectando..." :
                     status.phase === "error" ? "Sincronização interrompida" :
                     status.phase === "empty" ? "Casa sem dados" : "Aguardando compartilhamento"}</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="break-words text-xs text-muted-foreground">
                     {status.pending > 0 ? status.pending + " alteração(ões) aguardando envio. " : ""}
                     {status.message || (myEmail ? "Conta: " + myEmail : "Sem sessão iniciada")}
                   </p>
@@ -223,7 +223,7 @@ function SharePage() {
                 <div className="space-y-3">
                   <div className="space-y-1.5">
                     <Label htmlFor="invite-entry">Código recebido</Label>
-                    <Input id="invite-entry" value={joinCode} onChange={(event) => setJoinCode(event.target.value)}
+                    <Input id="invite-entry" className="min-w-0" value={joinCode} onChange={(event) => setJoinCode(event.target.value)}
                       placeholder="Cole aqui o convite recebido" autoComplete="off" />
                   </div>
                   <label className="flex items-start gap-2 text-xs text-muted-foreground">
