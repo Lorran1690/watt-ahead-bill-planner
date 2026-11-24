@@ -45,6 +45,8 @@ export interface DailyExpense {
   date: string; // YYYY-MM-DD (data local do usuário)
   note: string;
   amount: number; // R$
+  /** Cômodo associado, quando o usuário indicar. Gasto geral fica sem cômodo. */
+  room?: import("./rooms").HouseRoomId;
 }
 
 export interface Bill {
