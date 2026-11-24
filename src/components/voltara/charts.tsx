@@ -31,7 +31,9 @@ export function DistributionDonut({ items, total }: { items: ForecastItem[]; tot
 export function ProjectionChart({ data, type, showRange, reference }: { data: Forecast[]; type: "bar" | "area"; showRange: boolean; reference?: number }) {
   const rows = data.map((f) => ({ k: f.month, label: monthShort(f.month), cost: Math.round(f.cost * 100) / 100, min: f.costMin, max: f.costMax, band: [f.costMin, f.costMax], days: f.days, kwh: f.kwh }));
   return (
-    <div className="h-64 w-full md:h-72">
+    <div role="region" aria-label="Gráfico dos próximos 12 meses; deslize para os lados no celular" tabIndex={0}
+      className="w-full max-w-full overflow-x-auto overscroll-x-contain pb-2" >
+      <div className="h-64 w-full min-w-[600px] md:h-72 md:min-w-0">
       <ResponsiveContainer>
         <ComposedChart data={rows} margin={{ top: 8, right: 4, left: -12, bottom: 0 }}>
           <defs>
@@ -62,6 +64,7 @@ export function ProjectionChart({ data, type, showRange, reference }: { data: Fo
           {reference != null && <Line dataKey={() => reference} stroke="var(--chart-2)" strokeDasharray="4 4" dot={false} strokeOpacity={0.5} isAnimationActive={false} />}
         </ComposedChart>
       </ResponsiveContainer>
+      </div>
     </div>
   );
 }
