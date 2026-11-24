@@ -10,33 +10,102 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AparelhosRouteImport } from './routes/aparelhos'
+import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
+import { Route as ContasRouteImport } from './routes/contas'
+import { Route as HabitosRouteImport } from './routes/habitos'
+import { Route as SimuladorRouteImport } from './routes/simulador'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AparelhosRoute = AparelhosRouteImport.update({
+  id: '/aparelhos',
+  path: '/aparelhos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConfiguracoesRoute = ConfiguracoesRouteImport.update({
+  id: '/configuracoes',
+  path: '/configuracoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContasRoute = ContasRouteImport.update({
+  id: '/contas',
+  path: '/contas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HabitosRoute = HabitosRouteImport.update({
+  id: '/habitos',
+  path: '/habitos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SimuladorRoute = SimuladorRouteImport.update({
+  id: '/simulador',
+  path: '/simulador',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/aparelhos': typeof AparelhosRoute
+  '/configuracoes': typeof ConfiguracoesRoute
+  '/contas': typeof ContasRoute
+  '/habitos': typeof HabitosRoute
+  '/simulador': typeof SimuladorRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/aparelhos': typeof AparelhosRoute
+  '/configuracoes': typeof ConfiguracoesRoute
+  '/contas': typeof ContasRoute
+  '/habitos': typeof HabitosRoute
+  '/simulador': typeof SimuladorRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/aparelhos': typeof AparelhosRoute
+  '/configuracoes': typeof ConfiguracoesRoute
+  '/contas': typeof ContasRoute
+  '/habitos': typeof HabitosRoute
+  '/simulador': typeof SimuladorRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/aparelhos'
+    | '/configuracoes'
+    | '/contas'
+    | '/habitos'
+    | '/simulador'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/aparelhos'
+    | '/configuracoes'
+    | '/contas'
+    | '/habitos'
+    | '/simulador'
+  id:
+    | '__root__'
+    | '/'
+    | '/aparelhos'
+    | '/configuracoes'
+    | '/contas'
+    | '/habitos'
+    | '/simulador'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AparelhosRoute: typeof AparelhosRoute
+  ConfiguracoesRoute: typeof ConfiguracoesRoute
+  ContasRoute: typeof ContasRoute
+  HabitosRoute: typeof HabitosRoute
+  SimuladorRoute: typeof SimuladorRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +117,51 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/aparelhos': {
+      id: '/aparelhos'
+      path: '/aparelhos'
+      fullPath: '/aparelhos'
+      preLoaderRoute: typeof AparelhosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/configuracoes': {
+      id: '/configuracoes'
+      path: '/configuracoes'
+      fullPath: '/configuracoes'
+      preLoaderRoute: typeof ConfiguracoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contas': {
+      id: '/contas'
+      path: '/contas'
+      fullPath: '/contas'
+      preLoaderRoute: typeof ContasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/habitos': {
+      id: '/habitos'
+      path: '/habitos'
+      fullPath: '/habitos'
+      preLoaderRoute: typeof HabitosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/simulador': {
+      id: '/simulador'
+      path: '/simulador'
+      fullPath: '/simulador'
+      preLoaderRoute: typeof SimuladorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AparelhosRoute: AparelhosRoute,
+  ConfiguracoesRoute: ConfiguracoesRoute,
+  ContasRoute: ContasRoute,
+  HabitosRoute: HabitosRoute,
+  SimuladorRoute: SimuladorRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
