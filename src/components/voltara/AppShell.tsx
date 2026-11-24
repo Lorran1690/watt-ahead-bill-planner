@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { cloudConfigured, getCloudClient } from "@/lib/voltara/cloud-client";
 import { findMyHousehold, startHouseholdSync, getCloudStatus, useCloudStatus } from "@/lib/voltara/cloud-sync";
 import { useHydrated } from "@tanstack/react-router";
-import { CalendarClock, FlaskConical, Gauge, House, Menu, Plug, Receipt, Settings, Users, Wallet } from "lucide-react";
+import { CalendarClock, FlaskConical, Droplets, Gauge, House, Menu, Plug, Receipt, Settings, Users, Wallet } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
@@ -13,7 +13,8 @@ const NAV = [
   { to: "/casa-3d", label: "Casa 3D", icon: House },
   { to: "/aparelhos", label: "Aparelhos", icon: Plug },
   { to: "/habitos", label: "Hábitos", icon: CalendarClock },
-  { to: "/contas", label: "Contas", icon: Receipt },
+  { to: "/contas", label: "Conta de Luz", icon: Receipt },
+  { to: "/agua", label: "Conta de Água", icon: Droplets },
   { to: "/simulador", label: "Simular", icon: FlaskConical },
   { to: "/configuracoes", label: "Ajustes", icon: Settings },
   { to: "/compartilhar", label: "Compartilhar", icon: Users },
