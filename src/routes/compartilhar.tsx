@@ -66,7 +66,7 @@ function SharePage() {
     void refresh();
     const { data: { subscription } } = client.auth.onAuthStateChange((_event) => {
       // Não chamar uma API de Auth sincronamente dentro do callback.
-      void Promise.resolve().then(() => { if (alive) void refresh(); });
+      setTimeout(() => { if (alive) void refresh(); }, 0);
     });
     return () => { alive = false; subscription.unsubscribe(); };
     // Conferir a sessão ao entrar na página, não reiniciar o canal em cada status.
