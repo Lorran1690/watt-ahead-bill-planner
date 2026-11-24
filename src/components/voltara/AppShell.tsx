@@ -1,9 +1,10 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { cloudConfigured, getCloudClient } from "@/lib/voltara/cloud-client";
 import { findMyHousehold, startHouseholdSync, getCloudStatus, useCloudStatus } from "@/lib/voltara/cloud-sync";
 import { useHydrated } from "@tanstack/react-router";
-import { CalendarClock, FlaskConical, Gauge, House, Plug, Receipt, Settings, Users, Wallet } from "lucide-react";
+import { CalendarClock, FlaskConical, Gauge, House, Menu, Plug, Receipt, Settings, Users, Wallet } from "lucide-react";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -72,8 +73,10 @@ function Logo() {
 export function AppShell() {
   const hydrated = useHydrated();
   const sync = useCloudStatus();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const MOBILE_NAV = NAV.slice(0, 3);
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen min-w-0 bg-background">
       <FamilyAutoConnect />
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-20 flex-col items-center gap-2 border-r border-sidebar-border bg-sidebar py-5 md:flex lg:w-56 lg:items-stretch lg:px-3">
         <Link to="/" aria-label="Voltar ao início do Voltara" className="mb-6 flex items-center gap-2 lg:px-1">
@@ -94,36 +97,70 @@ export function AppShell() {
         <p className="mt-auto hidden px-2 text-[11px] leading-snug text-muted-foreground lg:block">{sync.phase === "online" ? "Casa compartilhada: sincronização ativa." : sync.phase === "error" ? "Sincronização interrompida. Abra Compartilhar." : "Modo local. Entre em Compartilhar para sincronizar."}</p>
       </aside>
 
-      <header className="sticky top-0 z-20 flex items-center justify-between border-b bg-background/85 px-4 py-3 backdrop-blur md:hidden">
-        <Link to="/" aria-label="Voltar ao início do Voltara" className="flex items-center gap-2">
+      <header className="sticky top-0 z-20 flex min-w-0 items-center justify-between gap-2 border-b bg-background/90 px-3 py-2 backdrop-blur sm:px-4 md:hidden">
+        <Link to="/" aria-label="Voltar ao início do Voltara" className="flex min-w-0 shrink items-center gap-1.5 sm:gap-2">
           <Logo />
           <img src="/voltara-wordmark.svg" alt="" aria-hidden="true" width={130} height={33}
-            className="h-8 w-[130px] object-contain" />
+            className="h-8 min-w-0 w-[min(35vw,130px)] object-contain" />
         </Link>
-        <div className="flex items-center gap-1">
-          <Link to="/compartilhar" aria-label="Compartilhar com a família" className="rounded-lg p-2 text-muted-foreground hover:text-foreground data-[status=active]:text-primary">
+        <div className="flex shrink-0 items-center gap-0.5">
+          <Link to="/compartilhar" aria-label="Compartilhar com a família" className="flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground data-[status=active]:text-primary">
             <Users className="size-5" />
           </Link>
-          <Link to="/configuracoes" aria-label="Configurações" className="rounded-lg p-2 text-muted-foreground hover:text-foreground data-[status=active]:text-primary">
+          <Link to="/configuracoes" aria-label="Configurações" className="flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground data-[status=active]:text-primary">
             <Settings className="size-5" />
           </Link>
         </div>
       </header>
 
-      <main className="px-4 pb-28 pt-5 md:ml-20 md:px-8 md:pb-12 md:pt-8 lg:ml-56">
-        <div className="mx-auto max-w-6xl">
+      <main id="voltara-main" className="min-w-0 px-3 pb-[calc(6.75rem+env(safe-area-inset-bottom))] pt-4 sm:px-4 sm:pt-5 md:ml-20 md:px-8 md:pb-12 md:pt-8 lg:ml-56">
+        <div className="mx-auto min-w-0 max-w-6xl">
           {hydrated ? <Outlet /> : <div className="h-64 animate-pulse rounded-2xl bg-card" aria-label="Carregando" />}
         </div>
       </main>
 
-      <nav aria-label="Navegação inferior" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t bg-sidebar/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
-        {NAV.slice(0, 6).map(({ to, label, icon: Icon }) => (
+      <nav aria-label="Navegação principal no celular"
+        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-sidebar-border bg-sidebar/95 px-1 pt-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_30px_rgba(0,0,0,0.20)] backdrop-blur md:hidden">
+        {MOBILE_NAV.map(({ to, label, icon: Icon }) => (
           <Link key={to} to={to} activeOptions={{ exact: to === "/" }}
-            className={cn("flex flex-col items-center gap-1 py-2.5 text-[11px] text-muted-foreground transition-colors data-[status=active]:text-primary")}>
-            <Icon className="size-5" aria-hidden />{label}
+            className={cn("flex min-h-[62px] min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-center text-[12px] font-medium text-muted-foreground transition-colors data-[status=active]:bg-sidebar-accent data-[status=active]:text-primary")}>
+            <Icon className="size-5 shrink-0" aria-hidden />
+            <span className="max-w-full truncate">{label}</span>
           </Link>
         ))}
+        <button type="button" aria-label="Abrir menu completo" aria-haspopup="dialog"
+          aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen(true)}
+          className="flex min-h-[62px] min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[12px] font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-foreground">
+          <Menu className="size-5" aria-hidden />
+          <span>Menu</span>
+        </button>
       </nav>
+
+      <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+        <SheetContent side="bottom" className="max-h-[min(88dvh,720px)] overflow-y-auto rounded-t-3xl px-4 pt-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] md:hidden">
+          <SheetHeader className="mb-5 pr-7 text-left">
+            <SheetTitle>Explorar Voltara</SheetTitle>
+            <SheetDescription>Todos os recursos da casa em um só lugar.</SheetDescription>
+          </SheetHeader>
+          <nav aria-label="Todas as páginas do Voltara" className="grid grid-cols-2 gap-2">
+            {NAV.map(({ to, label, icon: Icon }) => (
+              <Link key={to} to={to} activeOptions={{ exact: to === "/" }}
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex min-h-14 min-w-0 items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 text-sm font-medium text-foreground hover:bg-accent data-[status=active]:border-primary/60 data-[status=active]:bg-primary/15 data-[status=active]:text-primary">
+                <Icon className="size-5 shrink-0" aria-hidden />
+                <span className="min-w-0 break-words">{label}</span>
+              </Link>
+            ))}
+          </nav>
+          <p className="mt-5 break-words rounded-xl border border-border/80 bg-background/70 p-3 text-xs text-muted-foreground">
+            {sync.phase === "online"
+              ? "Casa compartilhada: sincronização ativa."
+              : sync.phase === "error"
+                ? "Sincronização interrompida. Abra Compartilhar para reconectar."
+                : "Os dados deste aparelho permanecem locais até você ativar o compartilhamento."}
+          </p>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
