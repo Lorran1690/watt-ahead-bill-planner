@@ -31,11 +31,15 @@ function InstallPage() {
   const [platform, setPlatform] = useState<Platform>("unknown");
   const [feedback, setFeedback] = useState("");
   const [installing, setInstalling] = useState(false);
+  const [isPreview, setIsPreview] = useState(false);
+  const [showDesktopGuide, setShowDesktopGuide] = useState(false);
   const [areaFeedback, setAreaFeedback] = useState<Partial<Record<"android" | "ios" | "desktop", string>>>({});
 
   useEffect(() => {
     startVoltaraPwa();
     setPlatform(detectPlatform());
+    // Prévia dentro do editor não é o endereço definitivo para instalar.
+    setIsPreview(window.location.origin !== new URL(PUBLIC_INSTALL_URL).origin);
   }, []);
 
   type Target = "android" | "ios" | "desktop";
@@ -102,6 +106,12 @@ function InstallPage() {
             <div className="flex items-center gap-2 text-sm font-semibold text-success">
               <CheckCircle2 className="size-5" /> Já instalado
             </div>
+          ) : isPreview ? (
+            <Button asChild size="lg" className="min-h-12 w-full sm:w-auto">
+              <a href={PUBLIC_INSTALL_URL} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="mr-2 size-4" /> Abrir site oficial
+              </a>
+            </Button>
           ) : status.canInstall ? (
             <Button size="lg" type="button" onClick={() => beginInstall()} disabled={installing}
               className="min-h-12 w-full sm:w-auto">
@@ -127,6 +137,13 @@ function InstallPage() {
                   <strong className="text-foreground"> Instalar app</strong> ou <strong className="text-foreground">Adicionar à tela inicial</strong>.
                   Confirme para ver o ícone do Voltara na tela inicial.
                 </p>
+                {isPreview && platform === "android" ? (
+                  <Button asChild size="sm" className="mt-3 min-h-11 w-full justify-center sm:w-auto">
+                    <a href={PUBLIC_INSTALL_URL} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="mr-2 size-4" /> Abrir Voltara público no Chrome
+                    </a>
+                  </Button>
+                ) : (
                 <Button type="button" size="sm" className="mt-3 min-h-11 w-full justify-center sm:w-auto"
                   disabled={installing || (platform === "android" && status.isInstalled)}
                   onClick={() => beginInstall("android")}>
@@ -134,6 +151,7 @@ function InstallPage() {
                   {platform === "android" && status.isInstalled ? "Já instalado" :
                     platform === "desktop" || platform === "ios" ? "Copiar link para Android" : "Instalar no Android"}
                 </Button>
+                )}
                 {areaFeedback.android && <p role="status" className="mt-2 break-words text-xs text-primary">{areaFeedback.android}</p>}
               </div>
               <div>
@@ -165,14 +183,53 @@ function InstallPage() {
                   Abra o Voltara em uma guia do Chrome e clique no ícone de instalação na barra de endereço,
                   quando aparecer. Se não aparecer, procure <strong className="text-foreground">Instalar página como app</strong> no menu do navegador.
                 </p>
-                <Button type="button" size="sm" className="mt-3 min-h-11 w-full justify-center sm:w-auto"
-                  disabled={installing || (platform === "desktop" && status.isInstalled)}
-                  onClick={() => beginInstall("desktop")}>
-                  {platform === "android" || platform === "ios" ? <Copy className="mr-2 size-4" /> : <Download className="mr-2 size-4" />}
-                  {platform === "desktop" && status.isInstalled ? "Já instalado" :
-                    platform === "android" || platform === "ios" ? "Copiar link para PC" : "Instalar no computador"}
-                </Button>
+                {platform === "android" || platform === "ios" ? (
+                  <Button type="button" size="sm" className="mt-3 min-h-11 w-full justify-center sm:w-auto"
+                    onClick={() => void copyLink("desktop")}>
+                    <Copy className="mr-2 size-4" /> Copiar link para PC
+                  </Button>
+                ) : status.isInstalled ? (
+                  <p className="mt-3 flex items-center gap-2 text-sm text-success">
+                    <CheckCircle2 className="size-4" /> Voltara já instalado neste navegador
+                  </p>
+                ) : isPreview ? (
+                  <Button asChild size="sm" className="mt-3 min-h-11 w-full justify-center sm:w-auto">
+                    <a href={PUBLIC_INSTALL_URL} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="mr-2 size-4" /> Abrir Voltara público para instalar
+                    </a>
+                  </Button>
+                ) : status.canInstall ? (
+                  <Button type="button" size="sm" className="mt-3 min-h-11 w-full justify-center sm:w-auto"
+                    disabled={installing} onClick={() => beginInstall("desktop")}>
+                    <Download className="mr-2 size-4" /> {installing ? "Abrindo..." : "Instalar no computador"}
+                  </Button>
+                ) : (
+                  <Button type="button" size="sm" variant="outline"
+                    className="mt-3 min-h-11 w-full justify-center sm:w-auto"
+                    onClick={() => setShowDesktopGuide((value) => !value)}
+                    aria-expanded={showDesktopGuide} aria-controls="voltara-desktop-guide">
+                    <MonitorDown className="mr-2 size-4" />
+                    {showDesktopGuide ? "Ocultar instruções" : "Como instalar no computador"}
+                  </Button>
+                )}
                 {areaFeedback.desktop && <p role="status" className="mt-2 break-words text-xs text-primary">{areaFeedback.desktop}</p>}
+                {!isPreview && showDesktopGuide && platform === "desktop" && (
+                  <div id="voltara-desktop-guide" role="region" aria-label="Passos para instalar no computador"
+                    className="mt-3 space-y-2 rounded-xl border border-primary/30 bg-primary/10 p-3 text-xs leading-relaxed text-foreground">
+                    <p className="font-semibold">O Chrome não ofereceu o botão automático neste momento.</p>
+                    <ol className="list-decimal space-y-1 pl-5 text-muted-foreground">
+                      <li>Abra o Voltara em uma guia normal do Chrome ou Edge, não dentro da prévia do Lovable.</li>
+                      <li>No <strong className="text-foreground">Chrome</strong>, clique em ⋮ e procure <strong className="text-foreground">Transmitir, salvar e compartilhar → Instalar página como app</strong>. O nome pode variar.</li>
+                      <li>No <strong className="text-foreground">Edge</strong>, clique em ⋯ → Aplicativos → Instalar este site como aplicativo.</li>
+                      <li>Confirme a instalação para abrir o Voltara em janela própria.</li>
+                    </ol>
+                    <Button asChild variant="outline" size="sm" className="min-h-11 w-full whitespace-normal">
+                      <a href={PUBLIC_INSTALL_URL} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="mr-2 size-4" /> Abrir site público em outra guia
+                      </a>
+                    </Button>
+                  </div>
+                )}
               </div>
               <div>
                 <p className="font-semibold">Microsoft Edge</p>
