@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { applianceKwh, billError, calibrate, confidence, daysInMonth, dayTypeCounts, forecastMonth, modelKwh } from "./calc";
 import { defaultState } from "./defaults";
+import { expenseTotal, expensesForMonth, isValidExpenseDate, localDateKey, parseExpenseAmount } from "./expenses";
+import { expensesCsv } from "./export";
 import { loadState, parseBackup, saveState, STORAGE_KEY, type KV } from "./storage";
 import type { VoltaraState } from "./types";
 
@@ -155,5 +157,69 @@ describe("segurança e histórico", () => {
     const simulated = forecastMonth({ ...s, appliances }, "2026-11", { residualPerDay: r });
     expect(simulated.cost).toBeLessThan(base.cost);
     expect(forecastMonth(s, "2026-11").cost).toBeCloseTo(220, 6);
+  });
+});
+
+
+describe("controle de gastos diários", () => {
+  it("usa a data local do dia, sem ajuste de fuso UTC", () => {
+    expect(localDateKey(new Date(2026, 10, 23, 23, 55))).toBe("2026-11-23");
+  });
+  it("reconhece datas reais e anos bissextos", () => {
+    expect(isValidExpenseDate("2028-02-29")).toBe(true);
+    expect(isValidExpenseDate("2027-02-29")).toBe(false);
+    expect(isValidExpenseDate("2026-11-31")).toBe(false);
+  });
+  it("aceita vírgula ou ponto e rejeita valores inválidos", () => {
+    expect(parseExpenseAmount(" 25,90 ")).toBe(25.90);
+    expect(parseExpenseAmount("25.90")).toBe(25.90);
+    expect(parseExpenseAmount("0,01")).toBe(0.01);
+    expect(parseExpenseAmount("-5")).toBeNull();
+    expect(parseExpenseAmount("1,999")).toBeNull();
+    expect(parseExpenseAmount("abc")).toBeNull();
+    expect(parseExpenseAmount("0")).toBeNull();
+  });
+  it("soma lançamentos distintos no mesmo dia e separa meses", () => {
+    const s = defaultState();
+    s.expenses = [
+      { id: "a", date: "2026-11-23", amount: 10.10, note: "Almoço" },
+      { id: "b", date: "2026-11-23", amount: 20.20, note: "Mercado" },
+      { id: "c", date: "2026-12-01", amount: 3, note: "Ônibus" },
+    ];
+    expect(expensesForMonth(s.expenses, "2026-11")).toHaveLength(2);
+    expect(expenseTotal(expensesForMonth(s.expenses, "2026-11"))).toBeCloseTo(30.3, 2);
+    expect(expenseTotal(expensesForMonth(s.expenses, "2026-12"))).toBe(3);
+    expect(expensesCsv(s, "2026-11")).toContain("Mercado");
+    expect(expensesCsv(s, "2026-11")).not.toContain("Ônibus");
+  });
+  it("restaura backups antigos sem gastos e preserva os novos", () => {
+    const legacy = defaultState() as unknown as Record<string, unknown>;
+    delete legacy.expenses;
+    expect(parseBackup(JSON.stringify(legacy)).expenses).toEqual([]);
+
+    const s = defaultState();
+    s.expenses = [{ id: "compra1", date: "2026-11-23", amount: 17.4, note: "Padaria; café" }];
+    const kv = memKV();
+    saveState(kv, s);
+    expect(loadState(kv).expenses).toEqual(s.expenses);
+    expect(parseBackup(JSON.stringify(s)).expenses).toEqual(s.expenses);
+    expect(expensesCsv(s)).toContain('"Padaria; café"');
+  });
+  it("rejeita gastos negativos, datas impossíveis e IDs repetidos", () => {
+    const s = defaultState();
+    s.expenses = [{ id: "a", date: "2026-02-30", amount: 10, note: "" }];
+    expect(() => parseBackup(JSON.stringify(s))).toThrow();
+    s.expenses[0]!.date = "2026-11-23";
+    s.expenses[0]!.amount = -15;
+    expect(() => parseBackup(JSON.stringify(s))).toThrow();
+    s.expenses[0]!.amount = 10;
+    s.expenses.push({ id: "a", date: "2026-11-24", amount: 20, note: "Mercado" });
+    expect(() => parseBackup(JSON.stringify(s))).toThrow();
+  });
+  it("não interfere na previsão do consumo de energia", () => {
+    const s = defaultState();
+    const original = forecastMonth(s, "2026-11").cost;
+    s.expenses.push({ id: "a", date: "2026-11-23", amount: 70, note: "Compras" });
+    expect(forecastMonth(s, "2026-11").cost).toBeCloseTo(original, 6);
   });
 });
