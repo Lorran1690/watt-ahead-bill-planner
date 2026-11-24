@@ -6,19 +6,19 @@ import { cn } from "@/lib/utils";
 
 export function PageHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
   return (
-    <header className="mb-6 flex flex-wrap items-end justify-between gap-3 fade-up">
-      <div>
-        <h1 className="text-2xl font-semibold md:text-3xl">{title}</h1>
-        {subtitle && <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{subtitle}</p>}
+    <header className="mb-5 flex min-w-0 flex-col items-start justify-between gap-3 fade-up sm:mb-6 sm:flex-row sm:items-end">
+      <div className="min-w-0 w-full sm:w-auto">
+        <h1 className="break-words text-2xl font-semibold sm:text-3xl">{title}</h1>
+        {subtitle && <p className="mt-1 max-w-2xl break-words text-sm leading-relaxed text-muted-foreground">{subtitle}</p>}
       </div>
-      {action}
+      {action && <div className="flex w-full min-w-0 flex-wrap gap-2 [&_button]:min-h-11 sm:w-auto">{action}</div>}
     </header>
   );
 }
 
 export function Panel({ children, className, title, hint }: { children: ReactNode; className?: string; title?: string; hint?: string }) {
   return (
-    <section className={cn("rounded-2xl border bg-card p-4 md:p-5 fade-up", className)}>
+    <section className={cn("min-w-0 rounded-2xl border bg-card p-3.5 sm:p-4 md:p-5 fade-up", className)}>
       {title && (
         <div className="mb-3">
           <h2 className="text-base font-semibold">{title}</h2>
@@ -42,7 +42,7 @@ export function NumField({ label, value, onChange, unit, step = 1, min = 0, max,
           id={id} type="number" inputMode="decimal" step={step} min={min} max={max}
           value={Number.isFinite(value) ? value : ""}
           onChange={(e) => { const v = parseFloat(e.target.value); onChange(Number.isFinite(v) ? Math.max(min, max != null ? Math.min(max, v) : v) : 0); }}
-          className={cn("h-10 bg-background/60", unit && "pr-16")}
+          className={cn("h-11 min-w-0 bg-background/60 text-base sm:h-10 sm:text-sm", unit && "pr-16")}
         />
         {unit && <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">{unit}</span>}
       </div>
@@ -53,18 +53,18 @@ export function NumField({ label, value, onChange, unit, step = 1, min = 0, max,
 
 export function Notice({ children, tone = "info" }: { children: ReactNode; tone?: "info" | "warn" }) {
   return (
-    <div role="note" className={cn("flex items-start gap-2 rounded-xl border px-3 py-2.5 text-xs leading-relaxed", tone === "warn" ? "border-warning/30 bg-warning/10 text-foreground" : "border-primary/25 bg-accent/40 text-accent-foreground")}>
+    <div role="note" className={cn("flex min-w-0 items-start gap-2 rounded-xl border px-3 py-2.5 text-xs leading-relaxed break-words", tone === "warn" ? "border-warning/30 bg-warning/10 text-foreground" : "border-primary/25 bg-accent/40 text-accent-foreground")}>
       <Info className={cn("mt-0.5 size-3.5 shrink-0", tone === "warn" ? "text-warning" : "text-primary")} aria-hidden />
-      <div>{children}</div>
+      <div className="min-w-0 break-words">{children}</div>
     </div>
   );
 }
 
 export function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
   return (
-    <div className="rounded-xl border bg-card p-3">
+    <div className="min-w-0 rounded-xl border bg-card p-3">
       <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="mt-1 font-display text-lg font-semibold tabular">{value}</p>
+      <p className="mt-1 break-words font-display text-lg font-semibold tabular">{value}</p>
       {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
     </div>
   );
