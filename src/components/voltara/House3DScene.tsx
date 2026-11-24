@@ -312,6 +312,7 @@ export function House3DScene({
           renderer.render(scene, camera);
         }
         render();
+        update(selected, totals);
         controlsRef.current = {
           orbit: (delta) => { azimuth += delta; positionCamera(); },
           zoom: (delta) => { radius = THREE.MathUtils.clamp(radius + delta, 11, 34); positionCamera(); },
