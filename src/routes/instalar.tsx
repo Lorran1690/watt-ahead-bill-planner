@@ -81,7 +81,6 @@ function InstallPage() {
     });
   }
 
-  const installLink = typeof window !== "undefined" ? window.location.origin + "/instalar" : "/instalar";
 
   return (
     <div className="min-w-0 space-y-4">
@@ -189,7 +188,7 @@ function InstallPage() {
 
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <ExternalLink className="size-4 shrink-0" aria-hidden />
-        <a href={installLink} target="_blank" rel="noopener noreferrer"
+        <a href="/instalar" target="_blank" rel="noopener noreferrer"
           className="min-h-11 inline-flex items-center text-primary underline underline-offset-4">
           Abrir o Voltara em uma nova guia para instalar
         </a>
