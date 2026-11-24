@@ -18,6 +18,14 @@ export function historyCsv(state: VoltaraState): string {
   }
   return rows.join("\n");
 }
+/** Contas de água em CSV; jamais misturadas aos kWh de eletricidade. */
+export function waterHistoryCsv(state: VoltaraState): string {
+  const rows = [["mes", "valor_rs", "consumo_m3", "anotacao"].map(esc).join(";")];
+  for (const b of [...state.waterBills].sort((a, b) => a.month.localeCompare(b.month))) {
+    rows.push([b.month, n(b.value), b.m3 === undefined ? "" : n(b.m3), b.note ?? ""].map(esc).join(";"));
+  }
+  return "\uFEFF" + rows.join("\n");
+}
 export function download(name: string, content: string, type: string) {
   const url = URL.createObjectURL(new Blob([content], { type }));
   const a = document.createElement("a");
