@@ -24,8 +24,10 @@ jobs:
       - name: Dependências
         run: bun install --frozen-lockfile
 
-      - name: Testes automatizados
-        run: bun run test
-
+      # O build gera src/routeTree.gen.ts para rotas criadas no GitHub.
+      # Sem ele, o Vitest carrega a árvore antiga e não reconhece /gastos.
       - name: Build de produção (sem deploy)
         run: bun run build
+
+      - name: Testes automatizados
+        run: bun run test
