@@ -39,12 +39,12 @@ function Dashboard() {
 
       <section className="surface-hero relative overflow-hidden rounded-3xl border p-5 md:p-7 fade-up">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
+          <div className="min-w-0 w-full sm:w-auto">
             <p className="text-sm capitalize text-muted-foreground">Previsão para {monthLong(now)}</p>
-            <p className="mt-1 font-display text-5xl font-semibold tabular md:text-6xl">{money(f.cost)}</p>
-            <p className="mt-2 text-sm text-muted-foreground">Faixa provável <span className="text-foreground tabular">{money(f.costMin)} – {money(f.costMax)}</span></p>
+            <p className="mt-1 break-words font-display text-[clamp(2rem,8.7vw,3.75rem)] font-semibold leading-tight tracking-tight tabular">{money(f.cost)}</p>
+            <p className="mt-2 break-words text-sm text-muted-foreground">Faixa provável <span className="text-foreground tabular">{money(f.costMin)} – {money(f.costMax)}</span></p>
           </div>
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex w-full flex-col items-start gap-2 sm:w-auto sm:items-end">
             <span className={cn("inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium tabular", delta !== null && delta > 0 ? "bg-destructive/15 text-destructive" : "bg-success/15 text-success")}>
               {delta !== null && delta > 0 ? <ArrowUpRight className="size-4" /> : <ArrowDownRight className="size-4" />}{delta === null ? "Sem referência" : pct(delta) + " vs " + money(ref)}
             </span>
@@ -53,10 +53,10 @@ function Dashboard() {
             </span>
           </div>
         </div>
-        <div className="mt-6 grid grid-cols-3 gap-2">
+        <div className="mt-6 grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3">
           <Stat label="Consumo" value={kwh(f.kwh, 0)} sub={`${num(f.kwhMin, 0)}–${num(f.kwhMax, 0)} kWh`} />
           <Stat label="Dias" value={f.days} sub={`${counts.weekday} úteis · ${counts.saturday} sáb · ${counts.sunday} dom`} />
-          <Stat label="Tarifa" value={money(state.settings.tariff)} sub="por kWh (estimada)" />
+          <div className="col-span-2 sm:col-span-1"><Stat label="Tarifa" value={money(state.settings.tariff)} sub="por kWh (estimada)" /></div>
         </div>
       </section>
 
@@ -65,12 +65,12 @@ function Dashboard() {
           <DistributionDonut items={items} total={f.kwh} />
           <ul className="mt-4 space-y-2">
             {items.map((it) => (
-              <li key={it.id} className="flex items-center gap-3 text-sm">
+              <li key={it.id} className="flex min-w-0 items-center gap-2 text-xs sm:gap-3 sm:text-sm">
                 <span className="size-2.5 shrink-0 rounded-full" style={{ background: itemColor(it, f.items.indexOf(it)) }} />
                 <ApplianceIcon name={it.icon} className="size-4 shrink-0 text-muted-foreground" />
                 <span className={cn("min-w-0 flex-1 truncate", it.residual && "italic text-muted-foreground")}>{it.name}</span>
-                <span className="tabular text-muted-foreground">{num(it.kwh, 1)} kWh</span>
-                <span className="w-20 text-right tabular">{money(it.cost)}</span>
+                <span className="hidden shrink-0 tabular text-muted-foreground sm:inline">{num(it.kwh, 1)} kWh</span>
+                <span className="shrink-0 text-right tabular">{money(it.cost)}</span>
               </li>
             ))}
             {state.settings.fixedCharges > 0 && (
