@@ -150,17 +150,17 @@ function ExpensesPage() {
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border bg-card p-4">
           <div className="flex items-center gap-2 text-xs text-muted-foreground"><Wallet className="size-4 text-primary" /> Total do mês selecionado</div>
-          <p className="mt-2 text-2xl font-semibold tabular">{money(monthlyTotal)}</p>
+          <p className="mt-2 break-words text-2xl font-semibold tabular">{money(monthlyTotal)}</p>
           <p className="mt-1 text-xs capitalize text-muted-foreground">{monthLong(selectedMonth)}</p>
         </div>
         <div className="rounded-2xl border bg-card p-4">
           <div className="flex items-center gap-2 text-xs text-muted-foreground"><CalendarDays className="size-4 text-primary" /> Gastos de hoje</div>
-          <p className="mt-2 text-2xl font-semibold tabular">{money(todayTotal)}</p>
+          <p className="mt-2 break-words text-2xl font-semibold tabular">{money(todayTotal)}</p>
           <p className="mt-1 text-xs text-muted-foreground">{today.split("-").reverse().join("/")}</p>
         </div>
         <div className="rounded-2xl border bg-card p-4">
           <p className="text-xs text-muted-foreground">Registros no mês</p>
-          <p className="mt-2 text-2xl font-semibold tabular">{records.length}</p>
+          <p className="mt-2 break-words text-2xl font-semibold tabular">{records.length}</p>
           <p className="mt-1 text-xs text-muted-foreground">
             {grouped.size === 0 ? "Sem dias registrados" : "Média nos dias com gastos: " + money(monthlyTotal / grouped.size)}
           </p>
@@ -187,7 +187,7 @@ function ExpensesPage() {
               <Label htmlFor="expense-room">Cômodo da casa (opcional)</Label>
               <select id="expense-room" value={room}
                 onChange={(event) => setRoom(isHouseRoom(event.target.value) ? event.target.value : "")}
-                className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+                className="h-11 w-full min-w-0 rounded-md border bg-background px-3 text-base sm:text-sm">
                 <option value="">Gasto geral / sem cômodo</option>
                 {HOUSE_ROOMS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
@@ -210,7 +210,7 @@ function ExpensesPage() {
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
             {feedback && <p role="status" className="text-sm text-success">{feedback}</p>}
             <div className="flex flex-wrap gap-2">
-              <Button type="submit" className="flex-1">
+              <Button type="submit" className="min-h-11 min-w-[160px] flex-1">
                 <Plus className="mr-2 size-4" /> {editingId ? "Salvar alteração" : "Registrar gasto"}
               </Button>
               {editingId && (
@@ -254,7 +254,7 @@ function ExpensesPage() {
                   </header>
                   <div className="divide-y">
                     {items.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between gap-3 px-3 py-3">
+                      <div key={item.id} className="flex min-w-0 items-center justify-between gap-2 px-3 py-3">
                         <div className="min-w-0 flex-1">
                           <p className="whitespace-pre-wrap break-words text-sm">
                             {item.note.trim() || <span className="italic text-muted-foreground">Sem anotação</span>}
