@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Voltara</AssemblyName>
+    <RootNamespace>Voltara.Desktop</RootNamespace>
+    <Product>Voltara</Product>
+    <AssemblyTitle>Voltara</AssemblyTitle>
+    <Company>Voltara</Company>
+    <Description>Controle da casa e gastos familiares</Description>
+    <ApplicationIcon>voltara.ico</ApplicationIcon>
+    <Version>1.0.0</Version>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4370.26" />
+  </ItemGroup>
+</Project>
