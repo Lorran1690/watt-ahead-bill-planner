@@ -1,0 +1,67 @@
+name: Voltara Windows EXE
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'desktop/**'
+      - 'public/voltara-icon-192.png'
+      - '.github/workflows/desktop-windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-exe:
+    name: Compilar Voltara.exe (Windows 64-bit)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+
+      - name: Preparar .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Gerar ícone do Voltara
+        shell: pwsh
+        run: ./desktop/Voltara.Desktop/create-icon.ps1
+
+      - name: Compilar EXE portátil e autocontido
+        shell: pwsh
+        run: |
+          dotnet publish desktop/Voltara.Desktop/Voltara.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true --output dist/Voltara-Windows -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
+          if ($LASTEXITCODE -ne 0) { throw 'Falha no build do Voltara' }
+
+      - name: Verificar executável gerado
+        shell: pwsh
+        run: |
+          $exe = Join-Path $PWD 'dist/Voltara-Windows/Voltara.exe'
+          if (-not (Test-Path $exe)) { throw 'Arquivo Voltara.exe ausente' }
+          $stream = [System.IO.File]::OpenRead($exe)
+          try {
+            if ($stream.ReadByte() -ne 0x4d -or $stream.ReadByte() -ne 0x5a) {
+              throw 'O arquivo gerado não tem cabeçalho EXE válido'
+            }
+          } finally { $stream.Dispose() }
+          $file = Get-Item $exe
+          if ($file.Length -lt 1000000) { throw 'O arquivo EXE está pequeno demais' }
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash
+          Write-Host "Voltara.exe: $([Math]::Round($file.Length / 1MB, 1)) MB"
+          Write-Host "SHA256: $hash"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Voltara Windows (64-bit)"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "Executável: Voltara.exe"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "SHA256: $hash"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "Baixe o artefato Voltara-Windows-x64 desta execução e extraia o ZIP."
+
+      - name: Disponibilizar EXE para download
+        uses: actions/upload-artifact@v4
+        with:
+          name: Voltara-Windows-x64
+          path: dist/Voltara-Windows/Voltara.exe
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
