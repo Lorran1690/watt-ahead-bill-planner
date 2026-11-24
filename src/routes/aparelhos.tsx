@@ -25,6 +25,7 @@ function AppliancesPage() {
   const state = useVoltara();
   const [preset, setPreset] = useState("0");
   const [customName, setCustomName] = useState("");
+  const [customKind, setCustomKind] = useState<"power" | "monthly" | "perUse">("power");
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [feedback, setFeedback] = useState("");
   const month = currentMonthKey();
@@ -51,10 +52,12 @@ function AppliancesPage() {
       setFeedback("Informe o nome do aparelho personalizado.");
       return;
     }
-    const newAppliance: Appliance = {
-      id: uid(), name, icon: "plug", kind: "power",
-      enabled: true, watts: 100, hoursPerDay: 3, daysPerWeek: 7, uncertainty: 0.25,
-    };
+    const base = { id: uid(), name, icon: "plug", enabled: true, uncertainty: 0.25 };
+    const newAppliance: Appliance = customKind === "monthly"
+      ? { ...base, kind: "monthly", kwhPerMonth: 30 }
+      : customKind === "perUse"
+        ? { ...base, kind: "perUse", kwhPerUse: 0.5, usesPerWeek: 3 }
+        : { ...base, kind: "power", watts: 100, hoursPerDay: 3, daysPerWeek: 7 };
     setVoltara((prev) => ({ ...prev, appliances: [...prev.appliances, newAppliance] }));
     setCustomName("");
     setFeedback("Aparelho adicionado. Os valores iniciais são exemplos: ajuste-os.");
@@ -187,6 +190,13 @@ function AppliancesPage() {
             <Label htmlFor="custom-name">Outro aparelho</Label>
             <Input id="custom-name" maxLength={80} placeholder="Nome do aparelho" value={customName}
               onChange={(e) => setCustomName(e.target.value)} />
+            <Label htmlFor="custom-kind">Como medir o consumo?</Label>
+            <select id="custom-kind" className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+              value={customKind} onChange={(e) => setCustomKind(e.target.value as "power" | "monthly" | "perUse")}>
+              <option value="power">Potência (W) e horas por dia</option>
+              <option value="monthly">kWh por mês, como geladeiras</option>
+              <option value="perUse">kWh por utilização ou recarga</option>
+            </select>
             <Button type="button" variant="outline" className="w-full" onClick={addCustom}><Plus className="mr-2 size-4" /> Criar personalizado</Button>
           </div>
         </div>
