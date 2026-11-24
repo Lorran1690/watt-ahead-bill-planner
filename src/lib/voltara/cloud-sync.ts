@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getCloudClient } from "./cloud-client";
+import { PUBLIC_SHARING_URL } from "./public-url";
 import { diffSharedRecords, fromSharedRecords, toSharedRecords, type SharedRecord } from "./cloud-records";
 import { defaultState } from "./defaults";
 import { getVoltaraSnapshot, setVoltara, subscribeVoltara } from "./store";
@@ -61,7 +62,8 @@ export async function sendSignInEmail(email: string): Promise<void> {
   const client = assertBrowser();
   const { error } = await client.auth.signInWithOtp({
     email: email.trim(),
-    options: { emailRedirectTo: window.location.origin + "/compartilhar" },
+    // O domínio é fixo: solicitar login na prévia não deve abrir o editor Lovable.
+    options: { emailRedirectTo: PUBLIC_SHARING_URL },
   });
   if (error) throw error;
 }
