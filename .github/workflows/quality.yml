@@ -1,0 +1,31 @@
+name: Qualidade Voltara
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Testes e build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Dependências
+        run: bun install --frozen-lockfile
+
+      - name: Testes automatizados
+        run: bun run test
+
+      - name: Build de produção (sem deploy)
+        run: bun run build
