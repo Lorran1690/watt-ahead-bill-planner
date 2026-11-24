@@ -123,7 +123,7 @@ function Contas() {
             </div>
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
             {feedback && <p role="status" className="text-sm text-success">{feedback}</p>}
-            <Button className="w-full" type="submit">Salvar fatura</Button>
+            <Button className="min-h-11 w-full" type="submit">Salvar fatura</Button>
           </form>
         </Panel>
         <div className="space-y-4 lg:col-span-3">
@@ -157,21 +157,21 @@ function Contas() {
                   const comparison = billError(state, bill);
                   return (
                     <div key={bill.id} className="rounded-xl border bg-background/40 p-3">
-                      <div className="flex flex-wrap justify-between gap-3">
+                      <div className="flex min-w-0 flex-wrap justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold capitalize">{monthLong(bill.month)}</p>
-                          <p className="text-lg font-semibold tabular">{money(bill.value)}</p>
+                          <p className="break-words text-lg font-semibold tabular">{money(bill.value)}</p>
                           <p className="text-xs text-muted-foreground">
                             {bill.kwh === undefined ? "Consumo não informado" : kwh(bill.kwh)}
                           </p>
                         </div>
-                        <div className="text-right text-xs">
+                        <div className="min-w-0 text-left text-xs sm:text-right">
                           <p className="text-muted-foreground">Estimativa comparativa</p>
-                          <p className="text-base font-medium tabular">{money(comparison.predicted)}</p>
+                          <p className="break-words text-base font-medium tabular">{money(comparison.predicted)}</p>
                           <p className="text-muted-foreground">Desvio: {pct(comparison.pct)}</p>
                         </div>
                       </div>
-                      <div className="mt-3 flex justify-end gap-2">
+                      <div className="mt-3 flex flex-wrap justify-end gap-2">
                         <Button type="button" size="sm" variant="outline" onClick={() => edit(bill.id)}>Editar</Button>
                         <Button type="button" size="sm" variant={pendingDelete === bill.id ? "destructive" : "outline"}
                           onClick={() => remove(bill.id)}>
