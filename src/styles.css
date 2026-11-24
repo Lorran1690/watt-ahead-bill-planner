@@ -150,4 +150,12 @@
   animation: fade-up 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 @keyframes fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* Telas compactas: sem rolagem lateral do documento e sem zoom forçado ao focar formulários no iPhone. */
+@media (max-width: 767px) {
+  html, body, #app { max-width: 100%; overflow-x: clip; }
+  input:not([type="checkbox"]):not([type="radio"]), textarea, select { font-size: 16px; }
+  button, a, input, select, textarea { touch-action: manipulation; }
+}
+
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
