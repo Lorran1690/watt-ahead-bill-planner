@@ -59,14 +59,19 @@ function assertBill(raw: unknown): Bill {
 }
 
 function assertExpense(raw: unknown): DailyExpense {
-  if (!isObj(raw) || !validName(raw.id, 80) || !validDate(raw.date) ||
+  if (!isObj(raw)) throw new Error("Lançamento de gasto inválido.");
+  // Compatibilidade com a primeira planta de demonstração de 6 ambientes.
+  // Quarto antigo passa a Quarto 1; lavanderia antiga fica sem cômodo na nova planta.
+  const room = raw.room === "quarto" ? "quarto1" :
+    raw.room === "lavanderia" ? undefined : raw.room;
+  if (!validName(raw.id, 80) || !validDate(raw.date) ||
       typeof raw.note !== "string" || raw.note.length > 240 ||
-      (raw.room !== undefined && !isHouseRoom(raw.room)) ||
+      (room !== undefined && !isHouseRoom(room)) ||
       !validNumber(raw.amount, 0.01, 1_000_000)) {
     throw new Error("Lançamento de gasto inválido.");
   }
   return { id: raw.id, date: raw.date, note: raw.note, amount: raw.amount,
-    ...(raw.room === undefined ? {} : { room: raw.room as DailyExpense["room"] }) };
+    ...(room === undefined ? {} : { room }) };
 }
 
 /** Validação rigorosa para não importar valores falsos, negativos, NaN ou estruturas quebradas. */
