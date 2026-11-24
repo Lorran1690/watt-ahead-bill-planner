@@ -4,6 +4,7 @@ import { CheckCircle2, Copy, Download, ExternalLink, MonitorDown, Smartphone, Wi
 import { Button } from "@/components/ui/button";
 import { Notice, PageHeader, Panel } from "@/components/voltara/ui";
 import { requestVoltaraInstall, startVoltaraPwa, usePwaStatus } from "@/lib/voltara/pwa";
+import { PUBLIC_INSTALL_URL } from "@/lib/voltara/public-url";
 
 export const Route = createFileRoute("/instalar")({
   head: () => ({
@@ -40,7 +41,7 @@ function InstallPage() {
   type Target = "android" | "ios" | "desktop";
 
   async function copyLink(target: Target) {
-    const url = window.location.origin + "/instalar";
+    const url = PUBLIC_INSTALL_URL;
     try {
       await navigator.clipboard.writeText(url);
       const destination = target === "ios" ? "Safari do iPhone" : target === "android" ? "Chrome do Android" : "Chrome ou Edge do computador";
@@ -188,7 +189,7 @@ function InstallPage() {
 
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <ExternalLink className="size-4 shrink-0" aria-hidden />
-        <a href="/instalar" target="_blank" rel="noopener noreferrer"
+        <a href={PUBLIC_INSTALL_URL} target="_blank" rel="noopener noreferrer"
           className="min-h-11 inline-flex items-center text-primary underline underline-offset-4">
           Abrir o Voltara em uma nova guia para instalar
         </a>
