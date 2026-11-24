@@ -150,7 +150,8 @@ async function refreshFromCloud() {
   const id = activeId;
   try {
     const rows = await fetchRows(id);
-    if (activeId !== id) return;
+    // Uma edição local pode ter acontecido durante a consulta: não sobrescrevê-la.
+    if (activeId !== id || pending > 0) return;
     if (rows.length === 0) {
       setStatus({ phase: "empty", message: "A casa ainda não tem dados compartilhados." });
       return;
