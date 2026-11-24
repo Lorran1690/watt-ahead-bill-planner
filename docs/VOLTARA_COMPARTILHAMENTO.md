@@ -10,14 +10,16 @@
 
 ## Configuração de autenticação (necessária uma vez)
 
-Na conta proprietária do Supabase, abra o [projeto Voltara](https://supabase.com/dashboard/project/okbqictunqsiqmoygbjs) e depois **Authentication → URL Configuration**.
+No [Supabase Auth URL Configuration](https://supabase.com/dashboard/project/okbqictunqsiqmoygbjs/auth/url-configuration):
 
-1. Use como **Site URL**, para os primeiros testes em preview:
-   `https://id-preview--da09f771-7183-488c-b2d5-3ca493f7c866.lovable.app`
-2. Adicione à lista de **Redirect URLs**:
-   `https://id-preview--da09f771-7183-488c-b2d5-3ca493f7c866.lovable.app/compartilhar`
-3. Quando houver publicação aprovada, adicione também `https://SEU-DOMINIO-PUBLICADO/compartilhar` e configure a Site URL conforme o domínio definitivo.
-4. Confirme que o provedor **Email** esteja habilitado. O link de login é enviado via `signInWithOtp`. O Supabase pode limitar o volume de e-mails até configurar um SMTP próprio.
+- **Site URL**: `https://watt-ahead-bill-planner.lovable.app`
+- **Redirect URLs**, adicionar EXATAMENTE:
+  `https://watt-ahead-bill-planner.lovable.app/compartilhar`
+- Pode manter a URL de prévia `https://id-preview--da09f771-7183-488c-b2d5-3ca493f7c866.lovable.app/compartilhar` para testes.
+- O cliente Supabase agora solicita explicitamente o retorno ao site público usando `PUBLIC_SHARING_URL` em `src/lib/voltara/public-url.ts`. **Não usar `window.location.origin`** para e-mails de acesso: esse valor muda quando alguém está no editor ou na prévia do Lovable.
+- Depois de alterar a configuração, solicite **um novo e-mail de login**, pois links antigos podem manter o destino anterior.
+- O login Supabase por e-mail deve estar habilitado em **Authentication → Providers → Email**. O ambiente pode precisar de SMTP se o volume ultrapassar a cota padrão.
+- Estas alterações de código no GitHub **não publicam automaticamente** a última versão. Não acione deploy sem autorização do proprietário.
 
 ## Fluxo de uso
 
