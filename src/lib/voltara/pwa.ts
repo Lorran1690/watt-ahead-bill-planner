@@ -42,16 +42,21 @@ function displayStandalone(): boolean {
   return safariStandalone || window.matchMedia("(display-mode: standalone)").matches;
 }
 
-export function startVoltaraPwa() {
-  if (typeof window === "undefined" || started) return;
-  started = true;
-  publish({ isInstalled: displayStandalone() });
-
+// Captura o evento o mais cedo possível (assim que o módulo JS é executado),
+// antes da hidratação React. Em conexões rápidas, o browser pode dispará-lo
+// antes do useEffect de AppShell, e nesse caso a versão anterior perdia o prompt.
+if (typeof window !== "undefined") {
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
     deferredPrompt = event as InstallPromptEvent;
     publish({ canInstall: true, lastError: null });
   });
+}
+
+export function startVoltaraPwa() {
+  if (typeof window === "undefined" || started) return;
+  started = true;
+  publish({ isInstalled: displayStandalone(), canInstall: deferredPrompt !== null && !displayStandalone() });
 
   window.addEventListener("appinstalled", () => {
     deferredPrompt = null;
