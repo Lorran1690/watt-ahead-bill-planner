@@ -4,6 +4,7 @@ import { cloudConfigured, getCloudClient } from "@/lib/voltara/cloud-client";
 import { findMyHousehold, startHouseholdSync, getCloudStatus, useCloudStatus } from "@/lib/voltara/cloud-sync";
 import { useHydrated } from "@tanstack/react-router";
 import { startVoltaraPwa } from "@/lib/voltara/pwa";
+import { startFamilyPresence } from "@/lib/voltara/presence";
 import { CalendarClock, Download, FlaskConical, Droplets, Gauge, House, Menu, Plug, Receipt, Settings, Users, Wallet } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -76,6 +77,10 @@ function Logo() {
 export function AppShell() {
   const hydrated = useHydrated();
   const sync = useCloudStatus();
+  useEffect(() => {
+    if (!hydrated) return;
+    return startFamilyPresence(sync.householdId);
+  }, [hydrated, sync.householdId]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const MOBILE_NAV = NAV.slice(0, 3);
   useEffect(() => {
