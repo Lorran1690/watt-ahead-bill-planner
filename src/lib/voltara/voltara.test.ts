@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applianceKwh, billError, calibrate, daysInMonth, dayTypeCounts, forecastMonth, modelKwh } from "./calc";
+import { applianceKwh, billError, calibrate, confidence, daysInMonth, dayTypeCounts, forecastMonth, modelKwh } from "./calc";
 import { defaultState } from "./defaults";
 import { loadState, parseBackup, saveState, STORAGE_KEY, type KV } from "./storage";
 import type { VoltaraState } from "./types";
@@ -98,5 +98,62 @@ describe("persistência", () => {
   it("backup inválido é rejeitado", () => {
     expect(() => parseBackup(JSON.stringify({ foo: 1 }))).toThrow();
     expect(parseBackup(JSON.stringify(defaultState())).appliances).toHaveLength(4);
+  });
+});
+
+
+describe("segurança e histórico", () => {
+  it("rejeita valores negativos, infinitos e dados de aparelho falsificados", () => {
+    const s = defaultState();
+    s.settings.tariff = -1;
+    expect(() => parseBackup(JSON.stringify(s))).toThrow();
+    s.settings.tariff = 1.35;
+    const pc = s.appliances.find((a) => a.id === "pc");
+    if (!pc || pc.kind !== "power") throw new Error("PC não encontrado");
+    pc.watts = -500;
+    expect(() => parseBackup(JSON.stringify(s))).toThrow();
+    pc.watts = 100;
+    s.settings.tariff = Infinity;
+    expect(() => parseBackup(JSON.stringify(s))).toThrow();
+  });
+  it("rejeita faturas duplicadas e consumos impossíveis", () => {
+    const s = defaultState();
+    s.bills = [
+      { id: "a", month: "2027-01", value: 250 },
+      { id: "b", month: "2027-01", value: 270 },
+    ];
+    expect(() => parseBackup(JSON.stringify(s))).toThrow();
+    s.bills = [{ id: "a", month: "2027-01", value: 250, kwh: -20 }];
+    expect(() => parseBackup(JSON.stringify(s))).toThrow();
+  });
+  it("usa a conta registrada quando ela coincide com o mês de referência", () => {
+    const s = defaultState();
+    s.bills = [{ id: "novo", month: "2026-11", value: 240 }];
+    expect(calibrate(s).billValue).toBe(240);
+    expect(calibrate(s).source).toBe("bill");
+  });
+  it("não usa contas futuras para estimar o erro de uma conta antiga", () => {
+    const s = defaultState();
+    const jan = { id: "jan", month: "2027-01", value: 240 };
+    s.bills = [jan, { id: "mar", month: "2027-03", value: 900 }];
+    const a = billError(s, jan).predicted;
+    const b = billError({ ...s, bills: [jan] }, jan).predicted;
+    expect(a).toBeCloseTo(b, 6);
+  });
+  it("não classifica como alta confiança a referência que só contém preço", () => {
+    expect(confidence(defaultState(), "2026-11").level).toBe("média");
+    const s = defaultState();
+    s.bills = [{ id: "real", month: "2026-11", value: 220, kwh: 160 }];
+    expect(confidence(s, "2026-11").level).toBe("alta");
+  });
+  it("o cenário de economia mantém o resíduo fixo e não muda o perfil original", () => {
+    const s = defaultState();
+    const base = forecastMonth(s, "2026-11");
+    const r = calibrate(s).residualPerDay;
+    const appliances = s.appliances.map((a) =>
+      a.id === "ventilador" && a.kind === "power" ? { ...a, hoursPerDay: 7 } : a);
+    const simulated = forecastMonth({ ...s, appliances }, "2026-11", { residualPerDay: r });
+    expect(simulated.cost).toBeLessThan(base.cost);
+    expect(forecastMonth(s, "2026-11").cost).toBeCloseTo(220, 6);
   });
 });
