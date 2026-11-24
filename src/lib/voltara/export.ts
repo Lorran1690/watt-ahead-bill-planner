@@ -23,3 +23,15 @@ export function download(name: string, content: string, type: string) {
   a.href = url; a.download = name; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+
+/** CSV de despesas individuais, independente do histórico de faturas de energia. */
+export function expensesCsv(state: VoltaraState, month?: MonthKey): string {
+  const rows = [["data", "anotacao", "valor_rs"].map(esc).join(";")];
+  const expenses = state.expenses.filter((e) => !month || e.date.startsWith(month + "-"))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  for (const expense of expenses) {
+    rows.push([expense.date, expense.note, n(expense.amount)].map(esc).join(";"));
+  }
+  return "\uFEFF" + rows.join("\n");
+}
