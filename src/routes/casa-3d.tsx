@@ -53,17 +53,17 @@ function House3DPage() {
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border bg-card p-4">
           <p className="flex items-center gap-2 text-xs text-muted-foreground"><Home className="size-4 text-primary" /> Gastos na casa neste mês</p>
-          <p className="mt-2 text-2xl font-semibold tabular">{money(summary.total)}</p>
+          <p className="mt-2 break-words text-2xl font-semibold tabular">{money(summary.total)}</p>
           <p className="mt-1 text-xs capitalize text-muted-foreground">{monthLong(month)}</p>
         </div>
         <div className="rounded-2xl border bg-card p-4">
           <p className="flex items-center gap-2 text-xs text-muted-foreground"><Layers className="size-4 text-primary" /> Gastos associados a cômodos</p>
-          <p className="mt-2 text-2xl font-semibold tabular">{withRoom}</p>
+          <p className="mt-2 break-words text-2xl font-semibold tabular">{withRoom}</p>
           <p className="mt-1 text-xs text-muted-foreground">De {monthRecords.length} lançamentos neste mês</p>
         </div>
         <div className="rounded-2xl border bg-card p-4">
           <p className="flex items-center gap-2 text-xs text-muted-foreground"><Info className="size-4 text-primary" /> Gastos gerais / sem cômodo</p>
-          <p className="mt-2 text-2xl font-semibold tabular">{money(summary.unassigned)}</p>
+          <p className="mt-2 break-words text-2xl font-semibold tabular">{money(summary.unassigned)}</p>
           <p className="mt-1 text-xs text-muted-foreground">{summary.unassignedCount} lançamento(s) fora da planta</p>
         </div>
       </div>
@@ -84,16 +84,16 @@ function House3DPage() {
       <div className="grid items-start gap-4 xl:grid-cols-5">
         <div className="space-y-3 xl:col-span-3">
           <House3DScene selected={selected} totals={totals} onSelect={setSelected} />
-          <div className="flex flex-wrap gap-2">
+          <div className="-mx-1 flex max-w-full snap-x gap-2 overflow-x-auto overscroll-x-contain px-1 pb-2 sm:flex-wrap">
             {HOUSE_ROOMS.map((room) => (
               <button type="button" key={room.id}
-                className={"rounded-lg border px-3 py-2 text-xs transition-colors " +
+                className={"flex min-h-11 shrink-0 snap-start items-center gap-1 rounded-lg border px-3 py-2 text-xs transition-colors " +
                   (selected === room.id ? "border-primary bg-primary/20 text-foreground" : "bg-card text-muted-foreground hover:text-foreground")}
                 onClick={() => setSelected(room.id)}
                 aria-pressed={selected === room.id}>
                 <span className="mr-1.5 inline-block size-2 rounded-full" style={{ backgroundColor: room.color }} />
                 {room.short}
-                <span className="ml-2 font-semibold text-foreground">{money(totals[room.id] ?? 0)}</span>
+                <span className="ml-1 font-semibold text-foreground">{money(totals[room.id] ?? 0)}</span>
               </button>
             ))}
           </div>
@@ -110,10 +110,10 @@ function House3DPage() {
               <>
                 <div className="rounded-xl border p-4" style={{ borderColor: activeRoom.color + "70" }}>
                   <p className="text-xs text-muted-foreground">Total de {activeRoom.name.toLowerCase()} em {monthLong(month)}</p>
-                  <p className="mt-1 text-3xl font-semibold tabular">{money(activeStat?.total ?? 0)}</p>
+                  <p className="mt-1 break-words text-3xl font-semibold tabular">{money(activeStat?.total ?? 0)}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{activeStat?.count ?? 0} gasto(s) vinculado(s)</p>
                 </div>
-                <div className="mt-4 flex items-center justify-between gap-2">
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold">Anotações do cômodo</h3>
                   <Link to="/gastos" search={{ room: selected! }} className="text-xs text-primary hover:underline">
                     Registrar aqui <ArrowRight className="ml-0.5 inline size-3" />
