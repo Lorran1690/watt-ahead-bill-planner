@@ -1,5 +1,6 @@
 import { defaultState } from "./defaults";
 import type { Appliance, Bill, DailyExpense, Settings, VoltaraState } from "./types";
+import { isHouseRoom } from "./rooms";
 
 export const STORAGE_KEY = "voltara:v1";
 export interface KV { getItem(k: string): string | null; setItem(k: string, v: string): void }
@@ -60,10 +61,12 @@ function assertBill(raw: unknown): Bill {
 function assertExpense(raw: unknown): DailyExpense {
   if (!isObj(raw) || !validName(raw.id, 80) || !validDate(raw.date) ||
       typeof raw.note !== "string" || raw.note.length > 240 ||
+      (raw.room !== undefined && !isHouseRoom(raw.room)) ||
       !validNumber(raw.amount, 0.01, 1_000_000)) {
     throw new Error("Lançamento de gasto inválido.");
   }
-  return { id: raw.id, date: raw.date, note: raw.note, amount: raw.amount };
+  return { id: raw.id, date: raw.date, note: raw.note, amount: raw.amount,
+    ...(raw.room === undefined ? {} : { room: raw.room as DailyExpense["room"] }) };
 }
 
 /** Validação rigorosa para não importar valores falsos, negativos, NaN ou estruturas quebradas. */
