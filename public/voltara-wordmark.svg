@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 85" role="img" aria-label="Voltara">
+<defs><linearGradient id="v" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#b951ff"/><stop offset=".48" stop-color="#8233ff"/><stop offset="1" stop-color="#00e5ed"/></linearGradient></defs>
+<text x="0" y="67" fill="url(#v)" font-family="Sora, Manrope, Arial, sans-serif" font-size="75" font-weight="700" letter-spacing="-5">V</text>
+<text x="57" y="67" fill="#f7f7fc" font-family="Sora, Manrope, Arial, sans-serif" font-size="69" font-weight="700" letter-spacing="-4">oltara</text>
+</svg>
