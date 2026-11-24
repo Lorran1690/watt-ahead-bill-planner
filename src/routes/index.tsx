@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowDownRight, ArrowUpRight, ShieldCheck } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Droplets, Receipt, ShieldCheck } from "lucide-react";
 import { addMonths, confidence, dayTypeCounts, forecastMonth, projection } from "@/lib/voltara/calc";
 import { currentMonthKey, kwh, money, monthLong, num, pct } from "@/lib/voltara/format";
 import { useVoltara } from "@/lib/voltara/store";
@@ -29,6 +29,7 @@ function Dashboard() {
   const ref = state.settings.referenceValue;
   const delta = ref > 0 ? (f.cost - ref) / ref : null;
   const counts = dayTypeCounts(now);
+  const waterThisMonth = state.waterBills.find((bill) => bill.month === now);
   const items = [...f.items].sort((a, b) => Number(!!a.residual) - Number(!!b.residual) || b.kwh - a.kwh);
   const cal = conf.calibration;
   const residual = f.items.find((i) => i.residual);
@@ -59,6 +60,23 @@ function Dashboard() {
           <div className="col-span-2 sm:col-span-1"><Stat label="Tarifa" value={money(state.settings.tariff)} sub="por kWh (estimada)" /></div>
         </div>
       </section>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Link to="/contas" className="flex min-w-0 min-h-[76px] items-center gap-3 rounded-2xl border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-accent/30">
+          <Receipt className="size-6 shrink-0 text-primary" aria-hidden />
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground">Contas de luz</p>
+            <p className="break-words font-semibold">Histórico e calibração</p>
+          </div>
+        </Link>
+        <Link to="/agua" className="flex min-w-0 min-h-[76px] items-center gap-3 rounded-2xl border bg-card p-4 transition-colors hover:border-cyan-400/40 hover:bg-accent/30">
+          <Droplets className="size-6 shrink-0 text-cyan-400" aria-hidden />
+          <div className="min-w-0">
+            <p className="text-xs text-muted-foreground">Conta de água deste mês</p>
+            <p className="break-words font-semibold">{waterThisMonth ? money(waterThisMonth.value) : "Adicionar conta de água"}</p>
+          </div>
+        </Link>
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-5">
         <Panel title="Para onde vai a energia" hint="Distribuição estimada do mês atual" className="lg:col-span-2">
