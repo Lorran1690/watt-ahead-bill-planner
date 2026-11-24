@@ -33,12 +33,14 @@ export function House3DScene({
     let cancelled = false;
     let cleanup: (() => void) | undefined;
     async function setup() {
-      const THREE = await import("three");
       const container = mountRef.current;
       if (cancelled || !container) return;
       try {
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "low-power" });
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.7));
+        const THREE = await import("three");
+        if (cancelled) return;
+        const compact = window.innerWidth < 640;
+        const renderer = new THREE.WebGLRenderer({ antialias: !compact, alpha: false, powerPreference: "low-power" });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, compact ? 1.25 : 1.7));
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         renderer.setClearColor(0x10111e);
         renderer.domElement.style.width = "100%";
@@ -50,7 +52,7 @@ export function House3DScene({
         const scene = new THREE.Scene();
         scene.background = new THREE.Color("#11121e");
         scene.fog = new THREE.Fog("#11121e", 23, 45);
-        const camera = new THREE.PerspectiveCamera(43, 1, 0.1, 65);
+        const camera = new THREE.PerspectiveCamera(compact ? 61 : 43, 1, 0.1, 65);
         const target = new THREE.Vector3(-0.8, 0, 0);
         let azimuth = -0.45;
         let elevation = 0.95;
@@ -296,8 +298,10 @@ export function House3DScene({
         function resize() {
           const width = Math.max(container!.clientWidth, 1);
           const height = Math.max(container!.clientHeight, 1);
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, width < 640 ? 1.25 : 1.7));
           renderer.setSize(width, height, false);
           camera.aspect = width / height;
+          camera.fov = width < 420 ? 64 : width < 640 ? 56 : 43;
           camera.updateProjectionMatrix();
         }
         const observer = new ResizeObserver(resize);
@@ -306,12 +310,22 @@ export function House3DScene({
 
         let frame = 0;
         let running = true;
-        function render() {
+        let isVisible = true;
+        let lastFrameTime = 0;
+        const visibility = new IntersectionObserver(([entry]) => {
+          isVisible = Boolean(entry?.isIntersecting);
+        }, { threshold: 0.05 });
+        visibility.observe(container);
+        function render(timestamp: number) {
           if (!running) return;
           frame = requestAnimationFrame(render);
+          const mobile = container!.clientWidth < 640;
+          if (!isVisible || document.hidden) return;
+          if (mobile && timestamp - lastFrameTime < 32) return;
+          lastFrameTime = timestamp;
           renderer.render(scene, camera);
         }
-        render();
+        frame = requestAnimationFrame(render);
         update(selected, totals);
         controlsRef.current = {
           orbit: (delta) => { azimuth += delta; positionCamera(); },
@@ -324,6 +338,7 @@ export function House3DScene({
           running = false;
           cancelAnimationFrame(frame);
           observer.disconnect();
+          visibility.disconnect();
           canvas.removeEventListener("pointerdown", down);
           canvas.removeEventListener("pointermove", move);
           canvas.removeEventListener("pointerup", up);
@@ -352,19 +367,19 @@ export function House3DScene({
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-primary/15 bg-[#11121e]">
-      <div ref={mountRef} className="h-[360px] w-full sm:h-[440px] lg:h-[560px]" aria-label="Maquete interativa tridimensional da casa" />
+      <div ref={mountRef} className="h-[min(58svh,400px)] min-h-[310px] w-full sm:h-[440px] lg:h-[560px]" aria-label="Maquete interativa tridimensional da casa" />
       {!ready && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-slate-300">
           {fallback ? "Visualização 3D não disponível neste aparelho. Selecione um cômodo na lista abaixo." : "Montando a Casa 3D..."}
         </div>
       )}
-      <div className="absolute bottom-3 right-3 flex gap-1 rounded-xl border border-white/10 bg-black/65 p-1 text-white backdrop-blur">
-        <button type="button" onClick={() => controlsRef.current?.orbit(-0.28)} aria-label="Girar casa à esquerda" title="Girar à esquerda" className="rounded-md px-3 py-2 hover:bg-white/15">↶</button>
-        <button type="button" onClick={() => controlsRef.current?.orbit(0.28)} aria-label="Girar casa à direita" title="Girar à direita" className="rounded-md px-3 py-2 hover:bg-white/15">↷</button>
-        <button type="button" onClick={() => controlsRef.current?.zoom(-2)} aria-label="Aproximar" title="Aproximar" className="rounded-md px-3 py-2 hover:bg-white/15">+</button>
-        <button type="button" onClick={() => controlsRef.current?.zoom(2)} aria-label="Afastar" title="Afastar" className="rounded-md px-3 py-2 hover:bg-white/15">−</button>
+      <div className="absolute bottom-2 right-2 flex gap-1 rounded-xl border border-white/10 bg-black/75 p-1 text-white backdrop-blur sm:bottom-3 sm:right-3">
+        <button type="button" onClick={() => controlsRef.current?.orbit(-0.28)} aria-label="Girar casa à esquerda" title="Girar à esquerda" className="flex size-11 items-center justify-center rounded-md text-lg hover:bg-white/15">↶</button>
+        <button type="button" onClick={() => controlsRef.current?.orbit(0.28)} aria-label="Girar casa à direita" title="Girar à direita" className="flex size-11 items-center justify-center rounded-md text-lg hover:bg-white/15">↷</button>
+        <button type="button" onClick={() => controlsRef.current?.zoom(-2)} aria-label="Aproximar" title="Aproximar" className="flex size-11 items-center justify-center rounded-md text-lg hover:bg-white/15">+</button>
+        <button type="button" onClick={() => controlsRef.current?.zoom(2)} aria-label="Afastar" title="Afastar" className="flex size-11 items-center justify-center rounded-md text-lg hover:bg-white/15">−</button>
       </div>
-      <p className="pointer-events-none absolute left-3 top-3 rounded-lg bg-black/70 px-3 py-2 text-[11px] text-slate-200">
+      <p className="pointer-events-none absolute left-2 top-2 hidden max-w-[calc(100%-1rem)] rounded-lg bg-black/70 px-3 py-2 text-[11px] text-slate-200 sm:block">
         Arraste para girar • toque num cômodo • use dois dedos para zoom
       </p>
     </div>
