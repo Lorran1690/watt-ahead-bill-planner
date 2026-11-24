@@ -39,6 +39,14 @@ export interface PerUseAppliance extends BaseAppliance {
 
 export type Appliance = PowerAppliance | MonthlyAppliance | PerUseAppliance;
 
+/** Lançamento de despesa cotidiana, separado das contas de energia. */
+export interface DailyExpense {
+  id: string;
+  date: string; // YYYY-MM-DD (data local do usuário)
+  note: string;
+  amount: number; // R$
+}
+
 export interface Bill {
   id: string;
   month: MonthKey;
@@ -62,5 +70,6 @@ export interface VoltaraState {
   settings: Settings;
   appliances: Appliance[];
   bills: Bill[];
+  expenses: DailyExpense[];
   residualUncertainty: number;
 }
