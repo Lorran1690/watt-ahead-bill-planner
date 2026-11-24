@@ -45,7 +45,7 @@ function FamilyAutoConnect() {
     void restore();
     const { data: { subscription } } = client.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
-        void Promise.resolve().then(restore);
+        setTimeout(() => { if (active) void restore(); }, 0);
       }
     });
     return () => {
