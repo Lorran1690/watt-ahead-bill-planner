@@ -1,0 +1,66 @@
+name: Voltara Native Windows WPF
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'desktop/Voltara.Native/**'
+      - 'public/voltara-icon-192.png'
+      - '.github/workflows/native-windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-windows:
+    name: Compilar Voltara.Nativo.exe
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Instalar .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Gerar identidade visual do Windows
+        shell: pwsh
+        run: |
+          ./desktop/Voltara.Desktop/create-icon.ps1
+          Copy-Item desktop/Voltara.Desktop/voltara.ico desktop/Voltara.Native/voltara.ico
+
+      - name: Compilar interface realmente nativa WPF
+        shell: pwsh
+        run: |
+          dotnet publish desktop/Voltara.Native/Voltara.Native.csproj -c Release -r win-x64 --self-contained true -o dist/Voltara-Nativo -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
+          if ($LASTEXITCODE -ne 0) { throw 'Falha no build do Voltara Nativo' }
+
+      - name: Validar executável gerado
+        shell: pwsh
+        run: |
+          $exe = Join-Path $PWD 'dist/Voltara-Nativo/Voltara.Nativo.exe'
+          if (-not (Test-Path $exe)) { throw 'Arquivo de saída não encontrado' }
+          $stream = [System.IO.File]::OpenRead($exe)
+          try {
+            if ($stream.ReadByte() -ne 0x4d -or $stream.ReadByte() -ne 0x5a) { throw 'Não é um arquivo executável Windows válido' }
+          } finally { $stream.Dispose() }
+          $file = Get-Item $exe
+          if ($file.Length -lt 1000000) { throw 'Arquivo muito pequeno; build suspeito' }
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash
+          Write-Host "Voltara Nativo: $([Math]::Round($file.Length / 1MB, 1)) MB"
+          Write-Host "SHA-256: $hash"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## Voltara Nativo WPF • Windows 64 bits"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "Sem WebView2 e sem interface web incorporada."
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "SHA-256: $hash"
+
+      - name: Anexar Voltara Nativo para download
+        uses: actions/upload-artifact@v4
+        with:
+          name: Voltara-Nativo-Windows-x64
+          path: dist/Voltara-Nativo/Voltara.Nativo.exe
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
