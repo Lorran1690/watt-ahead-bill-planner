@@ -6,7 +6,7 @@ import { routeTree } from "@/routeTree.gen";
 
 // Match routes without rendering or loading data, so these checks run without a browser.
 describe("Rotas do Voltara", () => {
-  it.each(["/", "/aparelhos", "/habitos", "/contas", "/simulador", "/configuracoes"])(
+  it.each(["/", "/gastos", "/aparelhos", "/habitos", "/contas", "/simulador", "/configuracoes"])(
     "encontra a página %s",
     (pathname) => {
       const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
