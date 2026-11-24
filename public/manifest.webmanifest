@@ -1,0 +1,43 @@
+{
+  "id": "/",
+  "name": "Voltara · Controle da Casa",
+  "short_name": "Voltara",
+  "description": "Controle os gastos da casa, contas de luz e água e acompanhe sua Casa 3D.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "background_color": "#10111e",
+  "theme_color": "#10111e",
+  "orientation": "any",
+  "categories": [
+    "finance",
+    "utilities",
+    "lifestyle"
+  ],
+  "icons": [
+    {
+      "src": "/voltara-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/voltara-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/voltara-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
