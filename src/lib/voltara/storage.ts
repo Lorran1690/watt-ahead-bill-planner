@@ -1,5 +1,5 @@
 import { defaultState } from "./defaults";
-import type { Appliance, Bill, Settings, VoltaraState } from "./types";
+import type { Appliance, Bill, DailyExpense, Settings, VoltaraState } from "./types";
 
 export const STORAGE_KEY = "voltara:v1";
 export interface KV { getItem(k: string): string | null; setItem(k: string, v: string): void }
@@ -8,6 +8,13 @@ const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 
 const validNumber = (v: unknown, min = 0, max = Number.MAX_SAFE_INTEGER): v is number =>
   typeof v === "number" && Number.isFinite(v) && v >= min && v <= max;
 const validMonth = (v: unknown): v is string => typeof v === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
+const validDate = (v: unknown): v is string => {
+  if (typeof v !== "string" || !/^\d{4}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/.test(v)) return false;
+  const [y, m, d] = v.split("-").map(Number);
+  if (!y || !m || !d) return false;
+  const utc = new Date(Date.UTC(y, m - 1, d));
+  return utc.getUTCFullYear() === y && utc.getUTCMonth() === m - 1 && utc.getUTCDate() === d;
+};
 const validName = (v: unknown, max = 80): v is string =>
   typeof v === "string" && v.trim().length > 0 && v.length <= max;
 
@@ -50,6 +57,15 @@ function assertBill(raw: unknown): Bill {
   return raw as unknown as Bill;
 }
 
+function assertExpense(raw: unknown): DailyExpense {
+  if (!isObj(raw) || !validName(raw.id, 80) || !validDate(raw.date) ||
+      typeof raw.note !== "string" || raw.note.length > 240 ||
+      !validNumber(raw.amount, 0.01, 1_000_000)) {
+    throw new Error("Lançamento de gasto inválido.");
+  }
+  return { id: raw.id, date: raw.date, note: raw.note, amount: raw.amount };
+}
+
 /** Validação rigorosa para não importar valores falsos, negativos, NaN ou estruturas quebradas. */
 export function normalizeState(raw: unknown): VoltaraState {
   if (!isObj(raw) || raw.version !== 1 || !isObj(raw.settings) ||
@@ -69,14 +85,18 @@ export function normalizeState(raw: unknown): VoltaraState {
     throw new Error("Configurações inválidas no backup.");
   }
 
-  if (raw.appliances.length > 100 || raw.bills.length > 240) {
+  if (raw.appliances.length > 100 || raw.bills.length > 240 ||
+      (raw.expenses !== undefined && (!Array.isArray(raw.expenses) || raw.expenses.length > 10000))) {
     throw new Error("Backup excede o limite de registros.");
   }
   const appliances = raw.appliances.map(assertAppliance);
   const bills = raw.bills.map(assertBill);
+  // Backups antigos (v1) não possuem gastos; manter compatibilidade sem perder dados.
+  const expenses = raw.expenses === undefined ? [] : (raw.expenses as unknown[]).map(assertExpense);
   if (new Set(appliances.map((a) => a.id)).size !== appliances.length ||
       appliances.some((a) => a.id === "outros") ||
-      new Set(bills.map((b) => b.month)).size !== bills.length) {
+      new Set(bills.map((b) => b.month)).size !== bills.length ||
+      new Set(expenses.map((e) => e.id)).size !== expenses.length) {
     throw new Error("Backup com aparelhos ou faturas duplicados.");
   }
   const residualUncertainty = raw.residualUncertainty === undefined
@@ -84,7 +104,7 @@ export function normalizeState(raw: unknown): VoltaraState {
   if (!validNumber(residualUncertainty, 0, 1)) {
     throw new Error("Incerteza residual inválida.");
   }
-  return { version: 1, settings, appliances, bills, residualUncertainty };
+  return { version: 1, settings, appliances, bills, expenses, residualUncertainty };
 }
 
 export function loadState(kv: KV | null): VoltaraState {
