@@ -56,6 +56,14 @@ export interface Bill {
   kwh?: number;
 }
 
+export interface WaterBill {
+  id: string;
+  month: MonthKey;
+  value: number; // R$
+  m3?: number; // m³ de água (opcional)
+  note?: string;
+}
+
 export interface Settings {
   tariff: number; // R$/kWh TOTAL estimado (já com tributos/bandeira médios)
   fixedCharges: number; // R$/mês fixos (ex.: iluminação pública) — fora da tarifa
@@ -72,6 +80,7 @@ export interface VoltaraState {
   settings: Settings;
   appliances: Appliance[];
   bills: Bill[];
+  waterBills: WaterBill[];
   expenses: DailyExpense[];
   residualUncertainty: number;
 }
