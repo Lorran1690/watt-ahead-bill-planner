@@ -11,6 +11,7 @@ import {
   signInWithCopiedEmailLink, signOutFamily, startHouseholdSync, useCloudStatus,
 } from "@/lib/voltara/cloud-sync";
 import { Notice, PageHeader, Panel } from "@/components/voltara/ui";
+import { FamilyMembers } from "@/components/voltara/FamilyMembers";
 import { PUBLIC_APP_ORIGIN, PUBLIC_SHARING_URL } from "@/lib/voltara/public-url";
 import { buildHouseholdInviteLink, clearPendingHouseholdInvite, getPendingHouseholdInvite, readHouseholdInviteHash, rememberHouseholdInvite } from "@/lib/voltara/invite-link";
 
@@ -379,6 +380,7 @@ function SharePage() {
         </>
       )}
 
+      {myEmail && household && <FamilyMembers />}
       {message && <p role="status" className="text-sm text-success">{message}</p>}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <Notice>
