@@ -12,6 +12,15 @@ function get(): VoltaraState {
   if (!state) state = loadState(kv());
   return state;
 }
+export function getVoltaraSnapshot(): VoltaraState {
+  return get();
+}
+
+export function subscribeVoltara(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+}
+
 export function setVoltara(next: VoltaraState | ((s: VoltaraState) => VoltaraState)) {
   state = typeof next === "function" ? next(get()) : next;
   saveState(kv(), state);
