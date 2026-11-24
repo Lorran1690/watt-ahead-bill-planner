@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CheckCircle2, Download, MonitorDown, Smartphone, Wifi, WifiOff } from "lucide-react";
+import { CheckCircle2, Copy, Download, ExternalLink, MonitorDown, Smartphone, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Notice, PageHeader, Panel } from "@/components/voltara/ui";
 import { requestVoltaraInstall, startVoltaraPwa, usePwaStatus } from "@/lib/voltara/pwa";
@@ -30,23 +30,58 @@ function InstallPage() {
   const [platform, setPlatform] = useState<Platform>("unknown");
   const [feedback, setFeedback] = useState("");
   const [installing, setInstalling] = useState(false);
+  const [areaFeedback, setAreaFeedback] = useState<Partial<Record<"android" | "ios" | "desktop", string>>>({});
 
   useEffect(() => {
     startVoltaraPwa();
     setPlatform(detectPlatform());
   }, []);
 
-  function beginInstall() {
+  type Target = "android" | "ios" | "desktop";
+
+  async function copyLink(target: Target) {
+    const url = window.location.origin + "/instalar";
+    try {
+      await navigator.clipboard.writeText(url);
+      const destination = target === "ios" ? "Safari do iPhone" : target === "android" ? "Chrome do Android" : "Chrome ou Edge do computador";
+      setAreaFeedback((previous) => ({
+        ...previous,
+        [target]: "Link copiado! Abra o endereço no " + destination + " para instalar o Voltara.",
+      }));
+    } catch {
+      setAreaFeedback((previous) => ({
+        ...previous,
+        [target]: "Não foi possível copiar automaticamente. Abra este endereço no aparelho: " + url,
+      }));
+    }
+  }
+
+  function beginInstall(target?: "android" | "desktop") {
+    // Evita oferecer uma instalação para o aparelho errado quando o link é aberto no PC/celular.
+    if (target && platform !== "unknown" && target !== platform) {
+      void copyLink(target);
+      return;
+    }
     if (installing) return;
     setInstalling(true);
     setFeedback("");
+    if (target) setAreaFeedback((previous) => ({ ...previous, [target]: "" }));
+    // Chamado a partir do clique, sem await antes do prompt do navegador.
     void requestVoltaraInstall().then((result) => {
-      if (result === "accepted") setFeedback("Pedido de instalação aceito. Confira os aplicativos do aparelho.");
-      else if (result === "dismissed") setFeedback("Instalação cancelada. Você pode tentar depois.");
-      else setFeedback("Abra o menu do navegador e use a opção Instalar aplicativo ou Adicionar à tela inicial.");
+      const message = result === "accepted"
+        ? "Instalação iniciada. Procure o ícone do Voltara nos seus aplicativos."
+        : result === "dismissed"
+          ? "Instalação cancelada. Você pode tentar novamente pelo menu do navegador."
+          : target === "android"
+            ? "No Chrome do Android, toque em ⋮ → Instalar app ou Adicionar à tela inicial. Abra o site diretamente no Chrome, fora da prévia incorporada."
+            : "No Chrome ou Edge do computador, use o menu → Instalar como aplicativo. Abra o site diretamente em uma guia do navegador.";
+      if (target) setAreaFeedback((previous) => ({ ...previous, [target]: message }));
+      else setFeedback(message);
       setInstalling(false);
     });
   }
+
+  const installLink = typeof window !== "undefined" ? window.location.origin + "/instalar" : "/instalar";
 
   return (
     <div className="min-w-0 space-y-4">
@@ -68,7 +103,7 @@ function InstallPage() {
               <CheckCircle2 className="size-5" /> Já instalado
             </div>
           ) : status.canInstall ? (
-            <Button size="lg" type="button" onClick={beginInstall} disabled={installing}
+            <Button size="lg" type="button" onClick={() => beginInstall()} disabled={installing}
               className="min-h-12 w-full sm:w-auto">
               <Download className="mr-2 size-4" /> {installing ? "Preparando..." : "Instalar agora"}
             </Button>
@@ -92,6 +127,14 @@ function InstallPage() {
                   <strong className="text-foreground"> Instalar app</strong> ou <strong className="text-foreground">Adicionar à tela inicial</strong>.
                   Confirme para ver o ícone do Voltara na tela inicial.
                 </p>
+                <Button type="button" size="sm" className="mt-3 min-h-11 w-full justify-center sm:w-auto"
+                  disabled={installing || (platform === "android" && status.isInstalled)}
+                  onClick={() => beginInstall("android")}>
+                  {platform === "desktop" || platform === "ios" ? <Copy className="mr-2 size-4" /> : <Download className="mr-2 size-4" />}
+                  {platform === "android" && status.isInstalled ? "Já instalado" :
+                    platform === "desktop" || platform === "ios" ? "Copiar link para Android" : "Instalar no Android"}
+                </Button>
+                {areaFeedback.android && <p role="status" className="mt-2 break-words text-xs text-primary">{areaFeedback.android}</p>}
               </div>
               <div>
                 <p className="font-semibold">iPhone (Safari)</p>
@@ -100,6 +143,11 @@ function InstallPage() {
                   escolha <strong className="text-foreground">Adicionar à Tela de Início</strong>.
                   O botão automático de instalação não aparece no Safari.
                 </p>
+                <Button type="button" variant="outline" size="sm" className="mt-3 min-h-11 w-full justify-center sm:w-auto"
+                  onClick={() => void copyLink("ios")}>
+                  <Copy className="mr-2 size-4" /> Copiar link para o Safari
+                </Button>
+                {areaFeedback.ios && <p role="status" className="mt-2 break-words text-xs text-primary">{areaFeedback.ios}</p>}
               </div>
               {platform === "android" && <p className="rounded-lg bg-primary/10 px-3 py-2 text-xs text-primary">Você está no Android. Prefira abrir o endereço diretamente no Chrome, fora de um navegador incorporado.</p>}
               {platform === "ios" && <p className="rounded-lg bg-primary/10 px-3 py-2 text-xs text-primary">Você está no iPhone ou iPad. Faça a instalação pelo botão Compartilhar do Safari.</p>}
@@ -117,6 +165,14 @@ function InstallPage() {
                   Abra o Voltara em uma guia do Chrome e clique no ícone de instalação na barra de endereço,
                   quando aparecer. Se não aparecer, procure <strong className="text-foreground">Instalar página como app</strong> no menu do navegador.
                 </p>
+                <Button type="button" size="sm" className="mt-3 min-h-11 w-full justify-center sm:w-auto"
+                  disabled={installing || (platform === "desktop" && status.isInstalled)}
+                  onClick={() => beginInstall("desktop")}>
+                  {platform === "android" || platform === "ios" ? <Copy className="mr-2 size-4" /> : <Download className="mr-2 size-4" />}
+                  {platform === "desktop" && status.isInstalled ? "Já instalado" :
+                    platform === "android" || platform === "ios" ? "Copiar link para PC" : "Instalar no computador"}
+                </Button>
+                {areaFeedback.desktop && <p role="status" className="mt-2 break-words text-xs text-primary">{areaFeedback.desktop}</p>}
               </div>
               <div>
                 <p className="font-semibold">Microsoft Edge</p>
@@ -129,6 +185,14 @@ function InstallPage() {
             </div>
           </div>
         </Panel>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <ExternalLink className="size-4 shrink-0" aria-hidden />
+        <a href={installLink} target="_blank" rel="noopener noreferrer"
+          className="min-h-11 inline-flex items-center text-primary underline underline-offset-4">
+          Abrir o Voltara em uma nova guia para instalar
+        </a>
       </div>
 
       <Panel title="Seus dados e a sincronização">
