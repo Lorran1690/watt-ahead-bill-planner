@@ -21,14 +21,27 @@ No [Supabase Auth URL Configuration](https://supabase.com/dashboard/project/okbq
 - O login Supabase por e-mail deve estar habilitado em **Authentication → Providers → Email**. O ambiente pode precisar de SMTP se o volume ultrapassar a cota padrão.
 - Estas alterações de código no GitHub **não publicam automaticamente** a última versão. Não acione deploy sem autorização do proprietário.
 
-## Fluxo de uso
+## Fluxo de uso seguro: marido e esposa
 
-1. No dispositivo principal, faça backup em **Ajustes** e abra `/compartilhar`.
-2. Digite seu e-mail pessoal e abra o link de confirmação recebido nele.
-3. Clique em **Criar uma casa**: isso importa o perfil local deste dispositivo.
-4. Clique em **Gerar convite**, copie o código aleatório de uso único e envie em privado para a segunda pessoa.
-5. No segundo aparelho, abra o mesmo `/compartilhar`, entre com o e-mail próprio e cole o código.
-6. Gastos e faturas podem ser alterados em qualquer dispositivo. Os registros são sincronizados individualmente para reduzir perdas em lançamentos simultâneos.
+1. Entre em **https://watt-ahead-bill-planner.lovable.app/compartilhar** no endereço público, e não no preview/editor.
+2. No dispositivo principal, exporte o backup em **Ajustes** caso os dados ainda estejam salvos em uma prévia do Lovable. Dados locais de origens diferentes não se transferem automaticamente.
+3. Solicite um **e-mail de acesso** e confirme-o. Se o botão do e-mail mandar ao Lovable, abra a opção **"O e-mail abriu o Lovable? Confirmar sem redirecionamento"** no site público. Copie o endereço do botão do e-mail **sem clicar nele**, cole no Voltara e confirme dentro do site, sem compartilhar esse endereço com ninguém.
+4. Somente depois de autenticado, clique em **Criar uma casa**. O primeiro usuário importa seus dados locais dessa origem para o banco.
+5. Clique em **Gerar convite** → **Copiar convite com link direto**. O link será `https://watt-ahead-bill-planner.lovable.app/compartilhar#convite=...` com um código secreto no fragmento (não no query string).
+6. Envie o link somente à segunda pessoa. Ela abre o site público, faz login usando **o e-mail próprio**, e confirma a entrada na casa. O convite será recuperado depois da autenticação, mesmo quando o link de login abrir outra aba do mesmo navegador.
+7. Verifique em **Compartilhar** se as duas contas pertencem à mesma casa. Gastos individuais, faturas, etc. são sincronizados separadamente.
+8. Se a versão pública ainda não mostrar os novos botões, atualize a versão publicada em **Lovable → Publish → Update**, apenas com autorização do proprietário. Um commit GitHub não comprova que o domínio publicado já foi atualizado.
+
+## Configuração dos e-mails no Supabase
+
+Nas configurações de autenticação do projeto Voltara:
+
+- `Site URL`: `https://watt-ahead-bill-planner.lovable.app`
+- Redirect URL autorizada: `https://watt-ahead-bill-planner.lovable.app/compartilhar`
+- Em **Authentication → Email Templates → Confirm Signup** e **Magic Link**, confira se o botão usa `{{ .ConfirmationURL }}` (ou um fluxo próprio de `token_hash`) e não possui endereço fixo `localhost`, `id-preview--...` ou `lovable.dev/projects/...`. Esta configuração do template só pode ser alterada no painel/admin autorizado.
+- O retorno `emailRedirectTo` é enviado pelo frontend usando `PUBLIC_SHARING_URL` e não a URL atual do navegador.
+- Se a confirmação antiga já tiver sido clicada, solicite outro e-mail. Não repita envios a cada segundo: o Supabase pode bloquear temporariamente com HTTP 429 (limite de envio).
+- Não compartilhe URLs de confirmação nem tokens de sessão com suporte, terceiros ou em screenshots.
 
 ## Notas de segurança e recuperação
 
