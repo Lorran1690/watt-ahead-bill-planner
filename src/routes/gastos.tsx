@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { CalendarDays, Download, Pencil, Plus, Trash2, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,10 +11,13 @@ import {
   expenseTotal, expensesForMonth, isValidExpenseDate, localDateKey, parseExpenseAmount,
 } from "@/lib/voltara/expenses";
 import { currentMonthKey, money, monthLong, uid } from "@/lib/voltara/format";
+import { HOUSE_ROOMS, isHouseRoom, roomName, suggestedRoom, type HouseRoomId } from "@/lib/voltara/rooms";
 import { setVoltara, useVoltara } from "@/lib/voltara/store";
 import type { DailyExpense } from "@/lib/voltara/types";
 
 export const Route = createFileRoute("/gastos")({
+  validateSearch: (search: Record<string, unknown>): { room?: HouseRoomId } =>
+    isHouseRoom(search.room) ? { room: search.room } : {},
   head: () => ({
     meta: [
       { title: "Controle de gastos — Voltara" },
@@ -29,6 +32,8 @@ const formatDay = (date: string) => dayFormatter.format(new Date(date + "T12:00:
 
 function ExpensesPage() {
   const state = useVoltara();
+  const search = Route.useSearch();
+  const [room, setRoom] = useState<HouseRoomId | "">(() => search.room ?? "");
   const [date, setDate] = useState(() => localDateKey());
   const [note, setNote] = useState("");
   const [amount, setAmount] = useState("");
@@ -40,6 +45,7 @@ function ExpensesPage() {
 
   const today = localDateKey();
   const records = expensesForMonth(state.expenses, selectedMonth);
+  const suggestion = room ? null : suggestedRoom(note);
   const monthlyTotal = expenseTotal(records);
   const todayTotal = expenseTotal(state.expenses.filter((item) => item.date === today));
   const grouped = new Map<string, DailyExpense[]>();
@@ -54,6 +60,7 @@ function ExpensesPage() {
     setDate(localDateKey());
     setNote("");
     setAmount("");
+    setRoom(search.room ?? "");
     setError("");
   }
 
@@ -81,6 +88,7 @@ function ExpensesPage() {
       date,
       note: note.trim(),
       amount: value,
+      ...(room ? { room } : {}),
     };
     // Um mesmo dia pode conter quantas despesas forem necessárias.
     setVoltara((previous) => ({
@@ -100,6 +108,7 @@ function ExpensesPage() {
     setDate(item.date);
     setNote(item.note);
     setAmount(item.amount.toFixed(2).replace(".", ","));
+    setRoom(item.room ?? "");
     setPendingDelete(null);
     setError("");
     setFeedback("Editando o lançamento. Salve para confirmar.");
@@ -134,7 +143,8 @@ function ExpensesPage() {
       />
       <Notice>
         Seus gastos do cotidiano são independentes da conta de luz. Os registros ficam salvos
-        neste navegador e entram no backup completo do Voltara.
+        neste navegador ou na casa compartilhada quando a sincronização estiver ativa.
+        Os gastos por cômodo aparecem na <Link to="/casa-3d" className="underline">Casa 3D</Link>.
       </Notice>
 
       <div className="grid gap-3 sm:grid-cols-3">
@@ -172,6 +182,24 @@ function ExpensesPage() {
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Ex.: mercado, almoço, combustível..." />
               <p className="text-xs text-muted-foreground">{note.length}/240 caracteres. Opcional.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="expense-room">Cômodo da casa (opcional)</Label>
+              <select id="expense-room" value={room}
+                onChange={(event) => setRoom(isHouseRoom(event.target.value) ? event.target.value : "")}
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+                <option value="">Gasto geral / sem cômodo</option>
+                {HOUSE_ROOMS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
+              {suggestion && (
+                <p className="text-xs text-muted-foreground">Talvez seja {roomName(suggestion).toLowerCase()}.{" "}
+                  <button type="button" className="font-medium text-primary underline"
+                    onClick={() => setRoom(suggestion)}>Associar a este cômodo</button>
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Cozinha americana e copa são duas áreas de gastos no mesmo ambiente aberto.
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="expense-amount">Valor gasto (R$)</Label>
@@ -230,6 +258,7 @@ function ExpensesPage() {
                         <div className="min-w-0 flex-1">
                           <p className="whitespace-pre-wrap break-words text-sm">
                             {item.note.trim() || <span className="italic text-muted-foreground">Sem anotação</span>}
+                            {item.room && <span className="mt-1 block text-xs text-primary">{roomName(item.room)}</span>}
                           </p>
                           <p className="mt-1 text-sm font-semibold tabular">{money(item.amount)}</p>
                         </div>
