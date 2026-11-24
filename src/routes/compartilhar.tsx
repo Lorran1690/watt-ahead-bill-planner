@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Check, Cloud, CloudOff, Copy, KeyRound, LogOut, RefreshCcw, ShieldCheck, Users } from "lucide-react";
+import { Check, Cloud, CloudOff, Copy, ExternalLink, KeyRound, Link2, LogOut, RefreshCcw, ShieldCheck, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,9 +8,11 @@ import { cloudConfigured, getCloudClient } from "@/lib/voltara/cloud-client";
 import {
   createHousehold, findMyHousehold, importLocalToHousehold,
   issueHouseholdInvite, joinHousehold, retryHouseholdSync, sendSignInEmail,
-  signOutFamily, startHouseholdSync, useCloudStatus,
+  signInWithCopiedEmailLink, signOutFamily, startHouseholdSync, useCloudStatus,
 } from "@/lib/voltara/cloud-sync";
 import { Notice, PageHeader, Panel } from "@/components/voltara/ui";
+import { PUBLIC_APP_ORIGIN, PUBLIC_SHARING_URL } from "@/lib/voltara/public-url";
+import { buildHouseholdInviteLink, clearPendingHouseholdInvite, getPendingHouseholdInvite, readHouseholdInviteHash, rememberHouseholdInvite } from "@/lib/voltara/invite-link";
 
 export const Route = createFileRoute("/compartilhar")({
   head: () => ({ meta: [
@@ -36,6 +38,26 @@ function SharePage() {
   const [error, setError] = useState("");
   const [confirmJoin, setConfirmJoin] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copiedInviteLink, setCopiedInviteLink] = useState(false);
+  const [isPreview, setIsPreview] = useState(false);
+  const [showEmailRecovery, setShowEmailRecovery] = useState(false);
+  const [pastedAuthLink, setPastedAuthLink] = useState("");
+
+  useEffect(() => {
+    const preview = window.location.origin !== PUBLIC_APP_ORIGIN && !import.meta.env.DEV;
+    setIsPreview(preview);
+    if (preview) return;
+    const fromHash = readHouseholdInviteHash(window.location.hash);
+    if (fromHash) {
+      try { rememberHouseholdInvite(window.localStorage, fromHash); } catch { /* sem armazenamento persistente */ }
+      setJoinCode(fromHash);
+      window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search);
+      setMessage("Convite recebido! Entre com seu e-mail e confirme a entrada na casa.");
+    } else {
+      const saved = getPendingHouseholdInvite(window.localStorage);
+      if (saved) setJoinCode(saved);
+    }
+  }, []);
 
   useEffect(() => {
     const client = getCloudClient();
@@ -86,7 +108,17 @@ function SharePage() {
     event.preventDefault();
     void run(async () => {
       await sendSignInEmail(email);
-      setMessage("Enviamos um link de acesso. Confira seu e-mail e abra o link neste dispositivo.");
+      setMessage("E-mail enviado! Abra o link no Voltara público. Se ele continuar levando ao Lovable, use a opção \"Confirmar sem redirecionamento\" logo abaixo.");
+    });
+  }
+
+  function confirmPastedEmail(event: FormEvent) {
+    event.preventDefault();
+    const link = pastedAuthLink;
+    setPastedAuthLink("");
+    void run(async () => {
+      await signInWithCopiedEmailLink(link);
+      setMessage("E-mail confirmado! Sua sessão foi aberta diretamente no Voltara público.");
     });
   }
 
@@ -109,6 +141,8 @@ function SharePage() {
       const id = await joinHousehold(joinCode.trim().toLowerCase());
       setHousehold({ id, role: "member" });
       await startHouseholdSync(id);
+      try { clearPendingHouseholdInvite(window.localStorage); } catch { /* armazenamento pode estar bloqueado */ }
+      setJoinCode("");
       setMessage("Você entrou na casa! Os lançamentos passam a ser compartilhados.");
       setConfirmJoin(false);
     });
@@ -120,7 +154,8 @@ function SharePage() {
       const code = await issueHouseholdInvite(household.id);
       setInviteCode(code);
       setCopied(false);
-      setMessage("Convite gerado. Ele vale por 7 dias e pode ser usado uma única vez.");
+      setCopiedInviteLink(false);
+      setMessage("Convite gerado. Copie o link público e envie diretamente à sua esposa. Ele vale por 7 dias e só pode ser usado uma vez.");
     });
   }
 
@@ -133,12 +168,22 @@ function SharePage() {
     });
   }
 
+  function copyInviteLink() {
+    if (!inviteCode) return;
+    void run(async () => {
+      await navigator.clipboard.writeText(buildHouseholdInviteLink(inviteCode));
+      setCopiedInviteLink(true);
+      setMessage("Link do site público copiado. Envie em particular para sua esposa.");
+    });
+  }
+
   function signOut() {
     void run(async () => {
       await signOutFamily();
       setMyEmail(null);
       setHousehold(null);
       setInviteCode("");
+      try { clearPendingHouseholdInvite(window.localStorage); } catch { /* armazenamento pode estar bloqueado */ }
       setMessage("Sessão encerrada. O perfil pessoal deste navegador foi restaurado.");
     });
   }
@@ -146,6 +191,15 @@ function SharePage() {
   return (
     <div className="space-y-4">
       <PageHeader title="Compartilhar" subtitle="Uma casa, dois acessos. Quando um salva um gasto, o outro recebe a atualização." />
+
+      {isPreview && (
+        <Notice tone="warn">
+          Você está na <strong>prévia do Lovable</strong>, que pode exigir acesso ao editor e não deve ser enviada como convite.
+          Entre pelo <a href={PUBLIC_SHARING_URL} className="font-semibold text-primary underline">Voltara público <ExternalLink className="inline size-3" /></a>.
+          Antes de trocar de endereço, <Link to="/configuracoes" className="underline">exporte seu backup</Link> se tiver gastos salvos somente neste navegador.
+          Os dados locais da prévia não são transferidos automaticamente para o domínio público.
+        </Notice>
+      )}
 
       {!cloudConfigured ? (
         <Panel title="Ativação pendente">
@@ -199,11 +253,39 @@ function SharePage() {
                   <Input id="cloud-email" type="email" required autoComplete="email"
                     placeholder="voce@exemplo.com" value={email} onChange={(event) => setEmail(event.target.value)} />
                 </div>
-                <Button type="submit" disabled={loading}><KeyRound className="mr-2 size-4" /> Enviar link de acesso</Button>
+                <Button type="submit" disabled={loading || isPreview}><KeyRound className="mr-2 size-4" /> Enviar link de acesso</Button>
               </form>
               <p className="mt-3 text-xs text-muted-foreground">
-                Você receberá um link de uso único. O e-mail precisa estar autorizado no projeto de autenticação.
+                Você receberá um link de uso único. Use sempre o endereço público do Voltara, nunca a prévia do Lovable.
               </p>
+              <div className="mt-4 border-t pt-4">
+                <button type="button" className="min-h-11 text-left text-sm font-semibold text-primary underline"
+                  aria-expanded={showEmailRecovery} aria-controls="voltara-login-recovery"
+                  onClick={() => setShowEmailRecovery((value) => !value)}>
+                  O e-mail abriu o Lovable? Confirmar sem redirecionamento
+                </button>
+                {showEmailRecovery && (
+                  <div id="voltara-login-recovery" className="mt-3 space-y-3">
+                    <Notice tone="warn">
+                      No e-mail novo, <strong>não clique</strong> no botão de confirmação. Pressione-o por alguns segundos
+                      no celular, ou clique com o botão direito no computador, e escolha <strong>Copiar endereço do link</strong>.
+                      Cole abaixo dentro do Voltara público. Links já utilizados podem ter expirado.
+                    </Notice>
+                    <form onSubmit={confirmPastedEmail} className="space-y-2">
+                      <Label htmlFor="voltara-copied-email-link">Endereço do link de confirmação do Supabase</Label>
+                      <Input id="voltara-copied-email-link" type="password" value={pastedAuthLink}
+                        onChange={(event) => setPastedAuthLink(event.target.value)}
+                        maxLength={4096} autoComplete="off" placeholder="Cole o endereço completo aqui" required />
+                      <Button type="submit" disabled={loading || isPreview} className="min-h-11 w-full sm:w-auto">
+                        <KeyRound className="mr-2 size-4" /> Confirmar meu acesso aqui
+                      </Button>
+                    </form>
+                    <p className="text-xs text-muted-foreground">
+                      O endereço é usado somente para verificar sua identidade com o Supabase. Não o envie para outras pessoas nem para este chat.
+                    </p>
+                  </div>
+                )}
+              </div>
             </Panel>
           ) : !household ? (
             <div className="grid gap-4 lg:grid-cols-2">
@@ -221,6 +303,9 @@ function SharePage() {
               </Panel>
               <Panel title="Entrar com um convite" hint="Ideal para o segundo celular">
                 <div className="space-y-3">
+                  {joinCode && (
+                    <Notice>Convite identificado. Confira os dados e confirme abaixo para entrar nesta casa.</Notice>
+                  )}
                   <div className="space-y-1.5">
                     <Label htmlFor="invite-entry">Código recebido</Label>
                     <Input id="invite-entry" className="min-w-0" value={joinCode} onChange={(event) => setJoinCode(event.target.value)}
@@ -271,13 +356,19 @@ function SharePage() {
                   {inviteCode && (
                     <div className="mt-3 space-y-2">
                       <p className="break-all rounded-xl border bg-background/60 p-3 font-mono text-xs" aria-label="Código de convite">{inviteCode}</p>
-                      <Button variant="outline" onClick={copyCode} type="button">
-                        {copied ? <Check className="mr-2 size-4" /> : <Copy className="mr-2 size-4" />}
-                        {copied ? "Copiado" : "Copiar código"}
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button onClick={copyInviteLink} type="button" disabled={loading} className="min-h-11">
+                          {copiedInviteLink ? <Check className="mr-2 size-4" /> : <Link2 className="mr-2 size-4" />}
+                          {copiedInviteLink ? "Link copiado" : "Copiar convite com link direto"}
+                        </Button>
+                        <Button variant="outline" onClick={copyCode} type="button" disabled={loading} className="min-h-11">
+                          {copied ? <Check className="mr-2 size-4" /> : <Copy className="mr-2 size-4" />}
+                          {copied ? "Código copiado" : "Copiar só o código"}
+                        </Button>
+                      </div>
                       <p className="text-xs text-muted-foreground">
-                        Peça que sua esposa entre em Compartilhar usando o próprio e-mail e cole esse código.
-                        Não publique o convite nas redes sociais.
+                        O link abre <strong>{PUBLIC_APP_ORIGIN}</strong>, não o editor Lovable. Sua esposa faz login com o próprio e-mail
+                        e confirma a entrada na casa. Envie o convite somente em particular.
                       </p>
                     </div>
                   )}
