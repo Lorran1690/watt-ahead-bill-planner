@@ -1,8 +1,8 @@
 import { defaultState } from "./defaults";
 import { normalizeState } from "./storage";
-import type { Appliance, Bill, DailyExpense, Settings, VoltaraState } from "./types";
+import type { Appliance, Bill, DailyExpense, Settings, VoltaraState, WaterBill } from "./types";
 
-export type RecordKind = "meta" | "appliance" | "bill" | "expense";
+export type RecordKind = "meta" | "appliance" | "bill" | "expense" | "water_bill";
 export interface SharedRecord {
   kind: RecordKind;
   record_key: string;
@@ -22,6 +22,9 @@ export function toSharedRecords(state: VoltaraState): SharedRecord[] {
   }
   for (const bill of state.bills) {
     items.push({ kind: "bill", record_key: bill.id, document: { ...bill } });
+  }
+  for (const waterBill of state.waterBills) {
+    items.push({ kind: "water_bill", record_key: waterBill.id, document: { ...waterBill } });
   }
   for (const expense of state.expenses) {
     items.push({ kind: "expense", record_key: expense.id, document: { ...expense } });
@@ -44,6 +47,7 @@ export function fromSharedRecords(records: SharedRecord[]): VoltaraState {
     residualUncertainty: metaResidual?.document?.value ?? base.residualUncertainty,
     appliances: records.filter((r) => r.kind === "appliance").map((r) => r.document as unknown as Appliance),
     bills: records.filter((r) => r.kind === "bill").map((r) => r.document as unknown as Bill),
+    waterBills: records.filter((r) => r.kind === "water_bill").map((r) => r.document as unknown as WaterBill),
     expenses: records.filter((r) => r.kind === "expense").map((r) => r.document as unknown as DailyExpense),
   };
   return normalizeState(raw);
