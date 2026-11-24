@@ -29,7 +29,9 @@ public sealed class VoltaraApi
     {
         var request = new HttpRequestMessage(method, ApiOrigin + path);
         request.Headers.TryAddWithoutValidation("apikey", PublishableKey);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", authenticated && SignedIn ? accessToken : PublishableKey);
+        // Public Auth requests use only apikey. User requests carry the session JWT.
+        if (authenticated && SignedIn)
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         if (payload != null)
             request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
         return request;
