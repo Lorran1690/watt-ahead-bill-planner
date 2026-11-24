@@ -1,10 +1,11 @@
 import { Link, Outlet } from "@tanstack/react-router";
 import { useHydrated } from "@tanstack/react-router";
-import { CalendarClock, FlaskConical, Gauge, Plug, Receipt, Settings, Zap } from "lucide-react";
+import { CalendarClock, FlaskConical, Gauge, Plug, Receipt, Settings, Wallet, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { to: "/", label: "Início", icon: Gauge },
+  { to: "/gastos", label: "Gastos", icon: Wallet },
   { to: "/aparelhos", label: "Aparelhos", icon: Plug },
   { to: "/habitos", label: "Hábitos", icon: CalendarClock },
   { to: "/contas", label: "Contas", icon: Receipt },
@@ -55,8 +56,8 @@ export function AppShell() {
         </div>
       </main>
 
-      <nav aria-label="Navegação inferior" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t bg-sidebar/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
-        {NAV.slice(0, 5).map(({ to, label, icon: Icon }) => (
+      <nav aria-label="Navegação inferior" className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t bg-sidebar/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+        {NAV.slice(0, 6).map(({ to, label, icon: Icon }) => (
           <Link key={to} to={to} activeOptions={{ exact: to === "/" }}
             className={cn("flex flex-col items-center gap-1 py-2.5 text-[11px] text-muted-foreground transition-colors data-[status=active]:text-primary")}>
             <Icon className="size-5" aria-hidden />{label}
