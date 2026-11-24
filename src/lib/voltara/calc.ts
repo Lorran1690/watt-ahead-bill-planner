@@ -106,7 +106,7 @@ export function calibrate(state: VoltaraState, excludeBillId?: string): Calibrat
     sources.push({ source: "bill", month: b.month, value: b.value, ...(b.kwh ? { kwh: b.kwh } : {}) });
   }
   // mais recente; empate → conta do histórico vence a referência
-  sources.sort((a, b) => monthDiff(b.month, a.month) || (a.source === "bill" ? 1 : -1));
+  sources.sort((a, b) => monthDiff(b.month, a.month) || (a.source === b.source ? 0 : a.source === "bill" ? 1 : -1));
   const latest = sources[sources.length - 1]!;
   const kwhFromBill = !!latest.kwh && latest.kwh > 0;
   const billKwh = kwhFromBill ? latest.kwh! : Math.max(0, latest.value - settings.fixedCharges) / Math.max(0.01, settings.tariff);
@@ -173,7 +173,7 @@ export function forecastMonth(state: VoltaraState, k: MonthKey, opts: ForecastOp
 export function confidence(state: VoltaraState, now: MonthKey) {
   const cal = calibrate(state);
   const months = Math.max(0, monthDiff(cal.month, now));
-  const level: "alta" | "média" | "baixa" = months <= 2 ? "alta" : months <= 5 ? "média" : "baixa";
+  const level: "alta" | "média" | "baixa" = months <= 2 && cal.kwhFromBill ? "alta" : months <= 5 ? "média" : "baixa";
   const extra = Math.min(0.25, Math.max(0, months - 2) * 0.03);
   return { level, months, extra, calibration: cal };
 }
@@ -191,7 +191,9 @@ export function projection(state: VoltaraState, from: MonthKey, count: number): 
 
 /** Erro previsto vs real: prevê o mês da conta SEM usar a própria conta na calibração. */
 export function billError(state: VoltaraState, bill: Bill) {
-  const cal = calibrate(state, bill.id);
-  const f = forecastMonth(state, bill.month, { calibration: cal });
+  // Evita vazamento temporal: uma conta FUTURA não pode calibrar uma previsão histórica.
+  const pastState: VoltaraState = { ...state, bills: state.bills.filter((b) => b.id !== bill.id && b.month < bill.month) };
+  const cal = calibrate(pastState);
+  const f = forecastMonth(pastState, bill.month, { calibration: cal });
   return { predicted: f.cost, error: f.cost - bill.value, pct: bill.value ? (f.cost - bill.value) / bill.value : 0 };
 }
