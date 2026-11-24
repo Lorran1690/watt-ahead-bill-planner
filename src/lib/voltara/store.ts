@@ -1,0 +1,26 @@
+import { useSyncExternalStore } from "react";
+import { defaultState } from "./defaults";
+import { loadState, saveState, type KV } from "./storage";
+import type { VoltaraState } from "./types";
+
+const SERVER = defaultState();
+let state: VoltaraState | null = null;
+const listeners = new Set<() => void>();
+const kv = (): KV | null => (typeof window === "undefined" ? null : window.localStorage);
+
+function get(): VoltaraState {
+  if (!state) state = loadState(kv());
+  return state;
+}
+export function setVoltara(next: VoltaraState | ((s: VoltaraState) => VoltaraState)) {
+  state = typeof next === "function" ? next(get()) : next;
+  saveState(kv(), state);
+  listeners.forEach((l) => l());
+}
+export function useVoltara(): VoltaraState {
+  return useSyncExternalStore(
+    (l) => { listeners.add(l); return () => listeners.delete(l); },
+    get,
+    () => SERVER,
+  );
+}
