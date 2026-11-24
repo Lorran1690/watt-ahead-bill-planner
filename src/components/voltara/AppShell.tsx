@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { cloudConfigured, getCloudClient } from "@/lib/voltara/cloud-client";
 import { findMyHousehold, startHouseholdSync, getCloudStatus, useCloudStatus } from "@/lib/voltara/cloud-sync";
 import { useHydrated } from "@tanstack/react-router";
-import { CalendarClock, FlaskConical, Gauge, House, Plug, Receipt, Settings, Users, Wallet, Zap } from "lucide-react";
+import { CalendarClock, FlaskConical, Gauge, House, Plug, Receipt, Settings, Users, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -59,9 +59,13 @@ function FamilyAutoConnect() {
 
 function Logo() {
   return (
-    <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[var(--shadow-glow)]">
-      <Zap className="size-4.5" aria-hidden />
-    </span>
+    <img
+      src="/voltara-mark.svg"
+      alt="Voltara"
+      width={44}
+      height={44}
+      className="size-11 shrink-0 object-contain"
+    />
   );
 }
 
@@ -72,10 +76,11 @@ export function AppShell() {
     <div className="min-h-screen bg-background">
       <FamilyAutoConnect />
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-20 flex-col items-center gap-2 border-r border-sidebar-border bg-sidebar py-5 md:flex lg:w-56 lg:items-stretch lg:px-3">
-        <div className="mb-6 flex items-center gap-2.5 lg:px-2">
+        <Link to="/" aria-label="Voltar ao início do Voltara" className="mb-6 flex items-center gap-2 lg:px-1">
           <Logo />
-          <span className="hidden font-display text-lg font-semibold lg:inline">Voltara</span>
-        </div>
+          <img src="/voltara-wordmark.svg" alt="" aria-hidden="true" width={142} height={36}
+            className="hidden h-9 w-[142px] object-contain lg:block" />
+        </Link>
         <nav aria-label="Principal" className="flex flex-col gap-1">
           {NAV.map(({ to, label, icon: Icon }) => (
             <Link key={to} to={to} activeOptions={{ exact: to === "/" }}
@@ -90,7 +95,11 @@ export function AppShell() {
       </aside>
 
       <header className="sticky top-0 z-20 flex items-center justify-between border-b bg-background/85 px-4 py-3 backdrop-blur md:hidden">
-        <div className="flex items-center gap-2"><Logo /><span className="font-display text-lg font-semibold">Voltara</span></div>
+        <Link to="/" aria-label="Voltar ao início do Voltara" className="flex items-center gap-2">
+          <Logo />
+          <img src="/voltara-wordmark.svg" alt="" aria-hidden="true" width={130} height={33}
+            className="h-8 w-[130px] object-contain" />
+        </Link>
         <div className="flex items-center gap-1">
           <Link to="/compartilhar" aria-label="Compartilhar com a família" className="rounded-lg p-2 text-muted-foreground hover:text-foreground data-[status=active]:text-primary">
             <Users className="size-5" />
