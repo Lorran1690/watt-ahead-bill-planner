@@ -28,6 +28,9 @@ let syncingFromRemote = false;
 let pending = 0;
 let chained: Promise<void> = Promise.resolve();
 let syncing = false;
+let connectionGeneration = 0;
+let startingHousehold: string | null = null;
+let startPromise: Promise<void> | null = null;
 
 const notify = () => listeners.forEach((listener) => listener());
 const setStatus = (patch: Partial<CloudStatus>) => { status = { ...status, ...patch }; notify(); };
@@ -207,6 +210,7 @@ function handleLocalChange() {
 }
 
 function clearActive() {
+  connectionGeneration++;
   const client = getCloudClient();
   unsubscribeLocal?.();
   unsubscribeLocal = null;
@@ -219,35 +223,62 @@ function clearActive() {
   setStatus({ phase: "local", householdId: null, message: "", pending: 0 });
 }
 
-/** Conecta à casa já autenticada. A nuvem é a referência e substitui a cópia local. */
-export async function startHouseholdSync(householdId: string): Promise<void> {
-  clearActive();
-  setStatus({ phase: "connecting", householdId, message: "Conectando à casa..." });
-  const rows = await fetchRows(householdId);
-  if (rows.length === 0) {
-    setStatus({ phase: "empty", householdId, message: "Esta casa ainda não possui dados para sincronizar." });
-    return;
-  }
-  applyRemote(rows);
-  activeId = householdId;
-  unsubscribeLocal = subscribeVoltara(handleLocalChange);
-  const client = assertBrowser();
-  channel = client.channel("voltara-family-" + householdId)
-    .on("postgres_changes", {
-      event: "*",
-      schema: "public",
-      table: "voltara_records",
-      filter: "household_id=eq." + householdId,
-    }, () => {
-      // Recarregar do servidor em vez de confiar no payload. RLS protege a consulta.
-      if (pending === 0) void refreshFromCloud();
-    })
-    .subscribe((s) => {
-      if (s === "SUBSCRIBED") setStatus({ phase: "online", householdId, message: "" });
-      if (s === "CHANNEL_ERROR" || s === "TIMED_OUT") {
-        setStatus({ phase: "error", householdId, message: "Conexão em tempo real interrompida. Tente reconectar." });
+/** Conecta à casa já autenticada. A nuvem é a referência e substitui a cópia local.
+ * Idempotente: evita canais duplicados quando a sessão é aberta em duas telas simultaneamente.
+ */
+export function startHouseholdSync(householdId: string): Promise<void> {
+  if (activeId === householdId && status.phase !== "error") return Promise.resolve();
+  if (startingHousehold === householdId && startPromise) return startPromise;
+
+  const connect = async () => {
+    clearActive();
+    const generation = connectionGeneration;
+    setStatus({ phase: "connecting", householdId, message: "Conectando à casa..." });
+    try {
+      const rows = await fetchRows(householdId);
+      // Um logout/troca de casa pode ter ocorrido enquanto a consulta estava em andamento.
+      if (generation !== connectionGeneration) return;
+      if (rows.length === 0) {
+        setStatus({ phase: "empty", householdId, message: "Esta casa ainda não possui dados para sincronizar." });
+        return;
       }
-    });
+      applyRemote(rows);
+      activeId = householdId;
+      unsubscribeLocal = subscribeVoltara(handleLocalChange);
+      const client = assertBrowser();
+      channel = client.channel("voltara-family-" + householdId)
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: "voltara_records",
+          filter: "household_id=eq." + householdId,
+        }, () => {
+          // Buscar novamente com RLS garante que só sejam exibidos dados autorizados.
+          if (pending === 0) void refreshFromCloud();
+        })
+        .subscribe((s) => {
+          if (generation !== connectionGeneration) return;
+          if (s === "SUBSCRIBED") setStatus({ phase: "online", householdId, message: "" });
+          if (s === "CHANNEL_ERROR" || s === "TIMED_OUT" || s === "CLOSED") {
+            setStatus({ phase: "error", householdId, message: "Conexão em tempo real interrompida. Tente reconectar." });
+          }
+        });
+    } catch (error) {
+      if (generation === connectionGeneration) {
+        setStatus({ phase: "error", householdId, message: error instanceof Error ? error.message : "Falha ao conectar à casa." });
+      }
+      throw error;
+    }
+  };
+  startingHousehold = householdId;
+  const task = connect().finally(() => {
+    if (startPromise === task) {
+      startPromise = null;
+      startingHousehold = null;
+    }
+  });
+  startPromise = task;
+  return task;
 }
 
 /** Importar dados locais é sempre uma ação EXPLÍCITA do dono da casa. */
@@ -277,6 +308,10 @@ export async function retryHouseholdSync() {
     const changes = diffSharedRecords(lastCommitted, toSharedRecords(getVoltaraSnapshot()));
     if (changes.length) {
       handleLocalChange();
+      return;
+    }
+    if (status.phase === "error") {
+      await startHouseholdSync(activeId);
       return;
     }
     await refreshFromCloud();
