@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Notice, NumField, PageHeader, Panel } from "@/components/voltara/ui";
 import { defaultState } from "@/lib/voltara/defaults";
-import { download, historyCsv, projectionCsv } from "@/lib/voltara/export";
+import { download, expensesCsv, historyCsv, projectionCsv } from "@/lib/voltara/export";
 import { currentMonthKey } from "@/lib/voltara/format";
 import { parseBackup } from "@/lib/voltara/storage";
 import { setVoltara, useVoltara } from "@/lib/voltara/store";
@@ -48,7 +48,7 @@ function SettingsPage() {
       setVoltara(parsed);
       setResetPending(false);
       setError("");
-      setFeedback("Backup importado. As previsões foram atualizadas.");
+      setFeedback("Backup importado. Previsões e histórico de gastos restaurados.");
     } catch {
       setFeedback("");
       setError("Backup inválido ou incompatível. Seus dados atuais foram preservados.");
@@ -154,6 +154,10 @@ function SettingsPage() {
               onClick={() => download("voltara-historico.csv", historyCsv(state), "text/csv;charset=utf-8")}>
               <Download className="mr-2 size-4" /> Exportar histórico (CSV)
             </Button>
+            <Button type="button" variant="outline" className="w-full justify-start"
+              onClick={() => download("voltara-gastos.csv", expensesCsv(state), "text/csv;charset=utf-8")}>
+              <Download className="mr-2 size-4" /> Exportar gastos diários (CSV)
+            </Button>
             <div className="space-y-1.5 border-t pt-3">
               <Label htmlFor="import-backup"><Upload className="mr-1 inline size-4" /> Importar backup JSON</Label>
               <Input id="import-backup" type="file" accept=".json,application/json" onChange={importJson}
@@ -172,7 +176,7 @@ function SettingsPage() {
 
       <Panel title="Restaurar configurações iniciais" hint="Ação permanente para os dados deste navegador">
         <p className="mb-3 text-sm text-muted-foreground">
-          Isso também apagará as contas e aparelhos personalizados. Faça backup antes.
+          Isso também apagará as contas, os gastos diários e os aparelhos personalizados. Faça backup antes.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant={resetPending ? "destructive" : "outline"} onClick={reset}>
