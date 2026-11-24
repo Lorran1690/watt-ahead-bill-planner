@@ -27,7 +27,7 @@ function Dashboard() {
   const f = forecastMonth(state, now, { calibration: conf.calibration, extraUncertainty: conf.extra });
   const proj = projection(state, addMonths(now, 1), 12);
   const ref = state.settings.referenceValue;
-  const delta = (f.cost - ref) / ref;
+  const delta = ref > 0 ? (f.cost - ref) / ref : null;
   const counts = dayTypeCounts(now);
   const items = [...f.items].sort((a, b) => Number(!!a.residual) - Number(!!b.residual) || b.kwh - a.kwh);
   const cal = conf.calibration;
@@ -45,8 +45,8 @@ function Dashboard() {
             <p className="mt-2 text-sm text-muted-foreground">Faixa provável <span className="text-foreground tabular">{money(f.costMin)} – {money(f.costMax)}</span></p>
           </div>
           <div className="flex flex-col items-end gap-2">
-            <span className={cn("inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium tabular", delta > 0 ? "bg-destructive/15 text-destructive" : "bg-success/15 text-success")}>
-              {delta > 0 ? <ArrowUpRight className="size-4" /> : <ArrowDownRight className="size-4" />}{pct(delta)} vs {money(ref)}
+            <span className={cn("inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium tabular", delta !== null && delta > 0 ? "bg-destructive/15 text-destructive" : "bg-success/15 text-success")}>
+              {delta !== null && delta > 0 ? <ArrowUpRight className="size-4" /> : <ArrowDownRight className="size-4" />}{delta === null ? "Sem referência" : pct(delta) + " vs " + money(ref)}
             </span>
             <span className="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs text-muted-foreground">
               <ShieldCheck className="size-3.5 text-primary" /> Confiança {conf.level}
