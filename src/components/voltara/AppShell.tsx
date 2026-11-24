@@ -79,7 +79,7 @@ export function AppShell() {
   return (
     <div className="min-h-screen min-w-0 bg-background">
       <FamilyAutoConnect />
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-20 flex-col items-center gap-2 border-r border-sidebar-border bg-sidebar py-5 md:flex lg:w-56 lg:items-stretch lg:px-3">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-20 flex-col items-center gap-2 overflow-y-auto border-r border-sidebar-border bg-sidebar py-5 md:flex lg:w-56 lg:items-stretch lg:px-3">
         <Link to="/" aria-label="Voltar ao início do Voltara" className="mb-6 flex items-center gap-2 lg:px-1">
           <Logo />
           <img src="/voltara-wordmark.svg" alt="" aria-hidden="true" width={142} height={36}
