@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Notice, NumField, PageHeader, Panel } from "@/components/voltara/ui";
 import { defaultState } from "@/lib/voltara/defaults";
-import { download, expensesCsv, historyCsv, projectionCsv } from "@/lib/voltara/export";
+import { download, expensesCsv, historyCsv, projectionCsv, waterHistoryCsv } from "@/lib/voltara/export";
 import { currentMonthKey } from "@/lib/voltara/format";
 import { parseBackup } from "@/lib/voltara/storage";
 import { setVoltara, useVoltara } from "@/lib/voltara/store";
@@ -154,6 +154,10 @@ function SettingsPage() {
               onClick={() => download("voltara-historico.csv", historyCsv(state), "text/csv;charset=utf-8")}>
               <Download className="mr-2 size-4" /> Exportar histórico (CSV)
             </Button>
+            <Button type="button" variant="outline" className="w-full min-h-11 justify-start whitespace-normal text-left"
+              onClick={() => download("voltara-contas-agua.csv", waterHistoryCsv(state), "text/csv;charset=utf-8")}>
+              <Download className="mr-2 size-4 shrink-0" /> Exportar contas de água (CSV)
+            </Button>
             <Button type="button" variant="outline" className="w-full justify-start"
               onClick={() => download("voltara-gastos.csv", expensesCsv(state), "text/csv;charset=utf-8")}>
               <Download className="mr-2 size-4" /> Exportar gastos diários (CSV)
@@ -176,7 +180,7 @@ function SettingsPage() {
 
       <Panel title="Restaurar configurações iniciais" hint="Ação permanente para os dados deste navegador">
         <p className="mb-3 text-sm text-muted-foreground">
-          Isso também apagará as contas, os gastos diários e os aparelhos personalizados. Faça backup antes.
+          Isso também apagará as contas de luz e água, os gastos diários e os aparelhos personalizados. Faça backup antes.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant={resetPending ? "destructive" : "outline"} onClick={reset}>
