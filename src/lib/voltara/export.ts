@@ -2,12 +2,9 @@ import { billError, projection } from "./calc";
 import type { MonthKey, VoltaraState } from "./types";
 import { roomName } from "./rooms";
 
-const esc = (v: string | number) => {
-  // Spreadsheet formula injection: preserve content as text even when opened in Excel.
-  const text = String(v);
-  const safe = typeof v === "string" && /^[\s\uFEFF]*[=+\-@\t\r\n]/.test(text) ? "'" + text : text;
-  return `"${safe.replace(/"/g, '""')}"`;
-};
+const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+// Only free-text notes need formula protection; negative numeric CSV fields stay numeric.
+const safeNote = (text: string) => /^[\s\uFEFF]*[=+\-@\t\r\n]/.test(text) ? "'" + text : text;
 const n = (v: number) => v.toFixed(2).replace(".", ",");
 
 export function projectionCsv(state: VoltaraState, from: MonthKey): string {
@@ -27,7 +24,7 @@ export function historyCsv(state: VoltaraState): string {
 export function waterHistoryCsv(state: VoltaraState): string {
   const rows = [["mes", "valor_rs", "consumo_m3", "anotacao"].map(esc).join(";")];
   for (const b of [...state.waterBills].sort((a, b) => a.month.localeCompare(b.month))) {
-    rows.push([b.month, n(b.value), b.m3 === undefined ? "" : n(b.m3), b.note ?? ""].map(esc).join(";"));
+    rows.push([b.month, n(b.value), b.m3 === undefined ? "" : n(b.m3), safeNote(b.note ?? "")].map(esc).join(";"));
   }
   return "\uFEFF" + rows.join("\n");
 }
@@ -45,7 +42,7 @@ export function expensesCsv(state: VoltaraState, month?: MonthKey): string {
   const expenses = state.expenses.filter((e) => !month || e.date.startsWith(month + "-"))
     .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
   for (const expense of expenses) {
-    rows.push([expense.date, expense.note, n(expense.amount), expense.room ? roomName(expense.room) : ""].map(esc).join(";"));
+    rows.push([expense.date, safeNote(expense.note), n(expense.amount), expense.room ? roomName(expense.room) : ""].map(esc).join(";"));
   }
   return "\uFEFF" + rows.join("\n");
 }
