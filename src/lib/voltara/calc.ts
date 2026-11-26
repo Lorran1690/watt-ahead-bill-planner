@@ -193,7 +193,13 @@ export function projection(state: VoltaraState, from: MonthKey, count: number): 
 export function billError(state: VoltaraState, bill: Bill) {
   // Evita vazamento temporal: uma conta FUTURA não pode calibrar uma previsão histórica.
   const pastState: VoltaraState = { ...state, bills: state.bills.filter((b) => b.id !== bill.id && b.month < bill.month) };
-  const cal = calibrate(pastState);
-  const f = forecastMonth(pastState, bill.month, { calibration: cal });
+  // A referência manual também pode ser do próprio mês ou de um mês futuro.
+  // Sem uma referência anterior, compare somente o modelo dos aparelhos.
+  const hasPastReference = state.settings.referenceMonth < bill.month;
+  const eligibleState = hasPastReference ? pastState : {
+    ...pastState, settings: { ...pastState.settings, referenceMonth: "0001-01", referenceValue: 0 },
+  };
+  const f = forecastMonth(eligibleState, bill.month, !hasPastReference && !pastState.bills.length
+    ? { residualPerDay: 0 } : { calibration: calibrate(eligibleState) });
   return { predicted: f.cost, error: f.cost - bill.value, pct: bill.value ? (f.cost - bill.value) / bill.value : 0 };
 }
