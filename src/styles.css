@@ -159,3 +159,29 @@
 }
 
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+
+/* Mobile-first: preserve page width without hiding overflowing content. */
+@media (max-width: 767px) {
+  #voltara-main { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+  #voltara-main :where(section, form, .grid, .flex, label) { min-width: 0; }
+  #voltara-main :where(input, select, textarea, audio, img, video) { max-width: 100%; }
+  #voltara-main :where(input:not([type="checkbox"]):not([type="radio"]), textarea, select) { font-size: 16px; }
+  #voltara-main :where(button, a[role="button"]) { max-width: 100%; min-height: 44px; white-space: normal; overflow-wrap: anywhere; }
+  #voltara-main :where(button > svg, a > svg) { flex-shrink: 0; }
+  #voltara-main :where(h1, h2, h3, p, label, summary) { overflow-wrap: anywhere; }
+  #voltara-main :where(input[type="date"], input[type="month"], input[type="time"]) { min-width: 0; width: 100%; }
+  [role="dialog"] { max-width: calc(100vw - 1rem); max-height: 90dvh; overflow-y: auto; overscroll-behavior: contain; }
+  [role="dialog"] :where(input, select, textarea) { max-width: 100%; font-size: 16px; }
+  .voltara-chat-composer { bottom: calc(4.25rem + env(safe-area-inset-bottom)); }
+  .voltara-chat-messages { min-height: 160px; max-height: 48dvh; }
+  html[data-voltara-keyboard="true"] .voltara-mobile-nav { display: none; }
+  html[data-voltara-keyboard="true"] #voltara-main { padding-bottom: 1rem; }
+  html[data-voltara-keyboard="true"] .voltara-chat-composer { position: relative; bottom: auto; }
+  html[data-voltara-keyboard="true"] .voltara-chat-messages { min-height: 100px; max-height: 30dvh; }
+}
+@media (max-width: 359px) {
+  #voltara-main { padding-inline: .625rem; }
+  .voltara-finance-stats { grid-template-columns: minmax(0,1fr); }
+  .voltara-chat-composer { padding: .375rem; }
+}
