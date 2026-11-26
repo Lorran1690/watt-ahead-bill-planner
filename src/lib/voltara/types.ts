@@ -9,6 +9,7 @@ interface BaseAppliance {
   /** Incerteza relativa (0.2 = ±20%) usada na faixa mínimo/máximo. */
   uncertainty: number;
   note?: string;
+  room?: import("./rooms").HouseRoomId;
 }
 
 /** kWh = (W/1000) * horas no mês. */
