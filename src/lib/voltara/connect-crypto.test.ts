@@ -20,7 +20,7 @@ describe("Connect crypto",()=>{
  it("different IV per message, attachment binding and domain separation",async()=>{
   const k=await unlockPair(newPairSecret(),"scope"),bytes=new TextEncoder().encode("photo");
   const a=await sealBytes(k,e,"media",bytes),b=await sealBytes(k,e,"media",bytes);
-  expect(a).not.toEqual(b);expect(await openBytes(k,e,"media",a)).toEqual(bytes);
+  expect(Array.from(a)).not.toEqual(Array.from(b));expect(Array.from(await openBytes(k,e,"media",a))).toEqual(Array.from(bytes));
   await expect(openBytes(k,e,"message",a)).rejects.toThrow();
   await expect(openBytes(k,{...e,id:"other"},"media",a)).rejects.toThrow();
  });
