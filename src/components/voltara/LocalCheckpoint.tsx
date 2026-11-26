@@ -7,9 +7,12 @@ import {getCloudClient} from "@/lib/voltara/cloud-client";
 import {saveCheckpoint,readCheckpoint,deleteCheckpoint} from "@/lib/voltara/offline-vault";
 async function scope(){
  const status=getCloudStatus();
- if(status.phase==="local")return "local";
+ if(status.phase==="local"){
+  if(window.localStorage.getItem("voltara:shared-cache:v1")==="yes")throw Error("Aguarde a restauração da sessão compartilhada.");
+  return "local";
+ }
  const client=getCloudClient();
- if(!client||!status.householdId)throw Error("Casa indisponível.");
+ if(!client||!status.householdId||status.phase!=="online")throw Error("Conecte a casa para criar ou acessar uma cópia compartilhada.");
  const {data,error}=await client.auth.getUser();
  if(error||!data.user||getCloudStatus().householdId!==status.householdId)throw Error("Confirme a sessão para acessar a cópia da casa.");
  return "user:"+data.user.id+":house:"+status.householdId;
