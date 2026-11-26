@@ -33,32 +33,41 @@ async function dispatch(admin:ReturnType<typeof createClient<any>>,pub:string,pr
  }));
  return jobs.length;
 }
+async function loadVapid(admin:ReturnType<typeof createClient<any>>){
+ const candidate=webpush.generateVAPIDKeys();
+ const r=await admin.rpc("voltara_push_vapid",{p_public:candidate.publicKey,p_private:candidate.privateKey});
+ if(r.error||!validKey(r.data?.publicKey,87,87)||!validKey(r.data?.privateKey,43,43))throw Error("vapid");
+ return {pub:r.data.publicKey as string,priv:r.data.privateKey as string};
+}
 Deno.serve(async req=>{
  if(req.headers.get("origin")&&req.headers.get("origin")!==origin)return json(403,{error:"origin"});
  if(req.method==="OPTIONS")return new Response(null,{status:204,headers:cors});
  if(req.method!=="POST")return json(405,{error:"method"});
  try{
   const authorization=req.headers.get("Authorization");
-  if(!authorization?.startsWith("Bearer "))return json(401,{error:"auth"});
   const url=Deno.env.get("SUPABASE_URL")!,anon=Deno.env.get("SUPABASE_ANON_KEY")!,service=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const pub=Deno.env.get("VOLTARA_VAPID_PUBLIC_KEY"),priv=Deno.env.get("VOLTARA_VAPID_PRIVATE_KEY"),subject=Deno.env.get("VOLTARA_VAPID_SUBJECT");
-  if(!pub||!priv||!subject||!url||!anon||!service)return json(503,{error:"push_not_configured"});
+  const subject=origin;
+  if(!url||!anon||!service)return json(503,{error:"push_not_configured"});
   const raw=await req.text();if(raw.length>6000)return json(413,{error:"size"});
   const body=JSON.parse(raw);
   const admin=createClient(url,service,{auth:{persistSession:false,autoRefreshToken:false}});
-  // Only a server-side scheduler with the service credential may drain all jobs.
-  // No credential is ever placed in the frontend or returned by this function.
+  // Scheduler authenticates using an independent random Vault credential, never a user JWT.
   if(body.action==="drain"){
-   if(authorization!=="Bearer "+service)return json(403,{error:"worker"});
+   const token=req.headers.get("x-voltara-worker-token");
+   if(!token||!/^[0-9a-f]{64}$/.test(token))return json(403,{error:"worker"});
+   const permitted=await admin.rpc("voltara_push_worker_authorized",{p_token:token});
+   if(permitted.error||permitted.data!==true)return json(403,{error:"worker"});
+   const {pub,priv}=await loadVapid(admin);
    return json(200,{ok:true,claimed:await dispatch(admin,pub,priv,subject,null)});
   }
+  if(!authorization?.startsWith("Bearer "))return json(401,{error:"auth"});
   const caller=createClient(url,anon,{global:{headers:{Authorization:authorization}},auth:{persistSession:false,autoRefreshToken:false}});
   const {data:{user},error}=await caller.auth.getUser();
   if(error||!user||user.is_anonymous)return json(401,{error:"auth"});
   if(!uuid(body.house))return json(400,{error:"house"});
   const peer=await caller.rpc("voltara_chat_peer",{h:body.house});
   if(peer.error||!uuid(peer.data))return json(403,{error:"pair"});
-  if(body.action==="config")return json(200,{ok:true,publicKey:pub});
+  if(body.action==="config"){const {pub}=await loadVapid(admin);return json(200,{ok:true,publicKey:pub});}
   if(body.action==="status"){
    if(!endpointAllowed(body.endpoint))return json(400,{error:"subscription"});
    const result=await admin.from("voltara_chat_push_devices").select("endpoint").eq("endpoint",body.endpoint).eq("user_id",user.id).eq("household_id",body.house).eq("peer_id",peer.data).maybeSingle();
@@ -88,6 +97,7 @@ Deno.serve(async req=>{
   const row=await caller.from("voltara_chat_messages").select("id,sender_id,recipient_id,created_at").eq("id",body.messageId).eq("household_id",body.house).maybeSingle();
   const age=row.data?Date.now()-Date.parse(row.data.created_at):Infinity;
   if(row.error||!row.data||row.data.sender_id!==user.id||row.data.recipient_id!==peer.data||age<0||age>300000)return json(403,{error:"message"});
+  const {pub,priv}=await loadVapid(admin);
   await dispatch(admin,pub,priv,subject,row.data.id);
   return json(200,{ok:true});
  }catch{return json(500,{error:"request_failed"});}
