@@ -4,7 +4,8 @@ import {Input} from "@/components/ui/input";
 import {Notice,Panel} from "@/components/voltara/ui";
 import {localDateKey} from "@/lib/voltara/expenses";
 
-const SOURCE="https://dadosabertos.aneel.gov.br/dataset/tarifas-distribuidoras-energia-eletrica/resource/fcf2906c-7c32-4b9b-a637-054e7a5234f4";
+const SOURCE="https://www.enel.com.br/pt/Tarifas_Enel.html";
+const DISTRIBUTOR="ENEL RJ";
 const API="https://dadosabertos.aneel.gov.br/api/3/action/datastore_search";
 const RESOURCE="fcf2906c-7c32-4b9b-a637-054e7a5234f4";
 type Row=Record<string,unknown>;
@@ -18,8 +19,7 @@ function rate(r:Row){
  if(unit==="r$/kwh")return te+tusd;
  return null;
 }
-export function AneelTariffs(){
- const [agent,setAgent]=useState("");
+export function EnelRioTariffs(){
  const [onDate,setOnDate]=useState(localDateKey);
  const [rows,setRows]=useState<Row[]>([]);
  const [busy,setBusy]=useState(false);
@@ -29,7 +29,7 @@ export function AneelTariffs(){
   e.preventDefault();if(busy)return;
   setBusy(true);setRows([]);setError("");setQueried(false);
   try{
-   const name=agent.trim();if(!name||name.length>80)throw Error("Informe a sigla exata da distribuidora.");
+   const name=DISTRIBUTOR;
    // Only public distributor and date are used, never household data.
    const found:Row[]=[];
    const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),20000);
@@ -37,7 +37,7 @@ export function AneelTariffs(){
     for(let offset=0;offset<5000;offset+=500){
       const query=new URLSearchParams({resource_id:RESOURCE,filters:JSON.stringify({SigAgente:name,DscSubGrupo:"B1"}),limit:"500",offset:String(offset)});
       const response=await fetch(API+"?"+query,{signal:controller.signal,credentials:"omit",referrerPolicy:"no-referrer"});
-      if(!response.ok)throw Error("A consulta da ANEEL está indisponível.");
+      if(!response.ok)throw Error("A consulta das tarifas da Enel RJ está indisponível.");
       const json=await response.json();
       if(json.success!==true||!Array.isArray(json.result?.records))throw Error("Formato de dados não reconhecido.");
       for(const record of json.result.records){
@@ -50,18 +50,18 @@ export function AneelTariffs(){
     }
     throw Error("Resultado muito amplo. Consulte a tabela oficial para evitar uma seleção incompleta.");
    }finally{clearTimeout(timer);}
-  }catch{setError("Não foi possível consultar automaticamente a ANEEL neste navegador. Use o portal oficial abaixo; nenhuma tarifa foi alterada.")}
+  }catch{setError("Não foi possível consultar automaticamente as tarifas da Enel RJ neste navegador. Abra a página oficial da distribuidora abaixo; nenhuma tarifa foi alterada.")}
   finally{setBusy(false)}
  }
- return <Panel title="Tarifas oficiais de energia" hint="Consulta experimental ao conjunto aberto de tarifas homologadas da ANEEL.">
+ return <Panel title="Tarifas Enel Distribuição Rio" hint="Exclusivamente Enel RJ, grupo residencial B1. Dados homologados publicados pela ANEEL.">
   <Notice>A tarifa TE + TUSD não inclui necessariamente impostos, bandeiras e iluminação pública. Não substitui automaticamente a tarifa total configurada no Voltara.</Notice>
   <form className="grid gap-3 mt-3 sm:grid-cols-2" onSubmit={search}>
-   <label className="text-sm">Sigla da distribuidora<Input value={agent} onChange={e=>setAgent(e.target.value)} maxLength={80} required placeholder="Sigla exata da distribuidora"/></label>
+   <div className="rounded-lg border bg-background p-3 text-sm"><strong>Enel Distribuição Rio</strong><p className="text-xs text-muted-foreground">Rio de Janeiro • B1 residencial</p></div>
    <label className="text-sm">Data de vigência<Input type="date" required value={onDate} onChange={e=>setOnDate(e.target.value)}/></label>
    <Button disabled={busy}>{busy?"Consultando...":"Consultar residencial B1"}</Button>
   </form>
   {error&&<p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
-  {queried&&!rows.length&&<p className="mt-3 text-sm text-muted-foreground">Nenhuma linha localizada. Confira a sigla e a data no portal oficial.</p>}
+  {queried&&!rows.length&&<p className="mt-3 text-sm text-muted-foreground">Nenhuma linha localizada. Confira a data e a tabela no portal oficial da Enel Rio.</p>}
   <div className="mt-3 space-y-2">{rows.map((r,i)=><div className="rounded-xl border p-3 text-sm break-words" key={i}>
     <strong>{txt(r,"SigAgente")} • {txt(r,"DscClasse")} / {txt(r,"DscSubClasse")}</strong>
     <p>{txt(r,"DscBaseTarifaria")} • {txt(r,"DscModalidadeTarifaria")} • {txt(r,"NomPostoTarifario")} • {txt(r,"DscDetalhe")}</p>
@@ -69,6 +69,6 @@ export function AneelTariffs(){
     <p>TE {txt(r,"VlrTE")} + TUSD {txt(r,"VlrTUSD")} ({txt(r,"DscUnidadeTerciaria")})</p>
     {rate(r)!==null&&<p>Equivalente: R$ {rate(r)!.toLocaleString("pt-BR",{maximumFractionDigits:6})}/kWh, sem complementos.</p>}
   </div>)}</div>
-  <a className="mt-3 inline-block text-primary underline text-sm" href={SOURCE} target="_blank" rel="noreferrer">Abrir fonte oficial ANEEL</a>
+  <a className="mt-3 inline-block text-primary underline text-sm" href={SOURCE} target="_blank" rel="noreferrer">Consultar tarifas e impostos no site da Enel Rio</a>
  </Panel>
 }
