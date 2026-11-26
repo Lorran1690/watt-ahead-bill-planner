@@ -2,7 +2,7 @@
 const { chromium } = require(process.env.VOLTARA_PLAYWRIGHT_ROOT + "/node_modules/playwright");
 const assert = require("node:assert/strict");
 const base = "http://127.0.0.1:4173";
-const routes = ["/","/gastos","/casa-3d","/aparelhos","/habitos","/contas","/agua","/simulador","/configuracoes","/compartilhar","/instalar"];
+const routes = ["/","/gastos","/casa-3d","/aparelhos","/habitos","/contas","/agua","/simulador","/configuracoes","/compartilhar","/instalar","/financas"];
 
 (async () => {
  const browser = await chromium.launch({headless:true});
@@ -29,6 +29,7 @@ const routes = ["/","/gastos","/casa-3d","/aparelhos","/habitos","/contas","/agu
   await page.waitForFunction(()=>JSON.parse(localStorage.getItem("voltara:v1")||"{}").expenses?.length===1);
   assert.equal((await state()).expenses[0].amount,17.9);
   await page.reload();
+  await page.locator("#expense-filter").fill("2026-11");
   await page.getByText("Auditoria local",{exact:true}).first().waitFor();
   await page.getByRole("button",{name:"Editar gasto",exact:true}).click();
   await page.locator("#expense-amount").fill("21,50");
@@ -56,6 +57,7 @@ const routes = ["/","/gastos","/casa-3d","/aparelhos","/habitos","/contas","/agu
   await page.getByRole("button",{name:/Exportar backup completo/}).click();
   assert.equal((await download).suggestedFilename(),"voltara-backup.json");
   await open("/gastos");
+  await page.locator("#expense-filter").fill("2026-11");
   await page.getByRole("button",{name:"Excluir gasto",exact:true}).click();
   await page.getByRole("button",{name:"Confirmar exclusão",exact:true}).click();
   await page.waitForFunction(()=>JSON.parse(localStorage.getItem("voltara:v1")||"{}").expenses?.length===0);
