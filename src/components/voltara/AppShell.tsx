@@ -1,7 +1,7 @@
 import { Link, Outlet } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { cloudConfigured, getCloudClient } from "@/lib/voltara/cloud-client";
-import { findMyHousehold, startHouseholdSync, getCloudStatus, useCloudStatus } from "@/lib/voltara/cloud-sync";
+import { disconnectAfterAuthLoss, findMyHousehold, startHouseholdSync, getCloudStatus, useCloudStatus } from "@/lib/voltara/cloud-sync";
 import { useHydrated } from "@tanstack/react-router";
 import { startVoltaraPwa } from "@/lib/voltara/pwa";
 import { startFamilyPresence } from "@/lib/voltara/presence";
@@ -32,13 +32,22 @@ function FamilyAutoConnect() {
     if (!client) return;
     let active = true;
     let connecting = false;
+    let previousUser: string | null = null;
     const restore = async () => {
       if (connecting || !active) return;
       connecting = true;
       try {
         const { data: { user }, error } = await client.auth.getUser();
-        if (error || !user || !active) return;
+        if (!active) return;
+        if (error || !user) {
+          if (!error || error.name === "AuthSessionMissingError") disconnectAfterAuthLoss();
+          return;
+        }
+        if (previousUser && previousUser !== user.id) disconnectAfterAuthLoss();
+        previousUser = user.id;
         const membership = await findMyHousehold();
+        if (!active) return;
+        if (!membership) { disconnectAfterAuthLoss(); return; }
         if (membership && active && getCloudStatus().householdId !== membership.id) {
           await startHouseholdSync(membership.id);
         }
@@ -50,6 +59,9 @@ function FamilyAutoConnect() {
     };
     void restore();
     const { data: { subscription } } = client.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        setTimeout(() => { if (active) { previousUser = null; disconnectAfterAuthLoss(); } }, 0);
+      }
       if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
         setTimeout(() => { if (active) void restore(); }, 0);
       }
