@@ -1,5 +1,6 @@
 import { useState, type ChangeEvent } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { AppUpdatePanel } from "@/components/voltara/AppUpdatePanel";
 import { Download, RotateCcw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,6 +86,7 @@ function SettingsPage() {
       {feedback && <p role="status" className="text-sm text-success">{feedback}</p>}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
 
+      <AppUpdatePanel />
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="Energia e encargos" hint="Valores usados em todas as previsões">
           <div className="space-y-4">

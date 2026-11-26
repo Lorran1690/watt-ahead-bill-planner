@@ -47,14 +47,17 @@ export async function queueMessage(pair:Pair,key:CryptoKey,payload:ChatPayload,b
  const base:Envelope={id:crypto.randomUUID(),household_id:pair.house,sender_id:pair.me,recipient_id:pair.peer,ciphertext:"",has_media:!!blob};
  const envelope=await sealMessage(key,base,payload);
  const media=blob?new Blob([await sealBytes(key,base,"media",new Uint8Array(await blob.arrayBuffer()))],{type:"application/octet-stream"}):undefined;
- await enqueue({id:base.id,scope:pair.scope,envelope,media,queuedAt:Date.now()});return base.id;
+ const item:Queued={id:base.id,scope:pair.scope,envelope,media,queuedAt:Date.now()};
+ await enqueue(item);return item;
 }
-export async function flushMessages(pair:Pair,active:()=>boolean){
+export async function flushMessages(pair:Pair,active:()=>boolean,onConfirmed?:(row:Envelope)=>void){
+ const outbox=await queued(pair.scope);
+ if(!outbox.length||!active())return;
  const c=client();
  // Must confirm membership before sending queued items, including after account changes.
  const current=await loadPair(pair.house);
  if(!current||current.scope!==pair.scope||!active())throw Error("Vínculo da conversa alterado.");
- for(const q of await queued(pair.scope)){
+ for(const q of outbox){
   if(!active())return;
   const e=q.envelope;
   if(e.household_id!==pair.house||e.sender_id!==pair.me||e.recipient_id!==pair.peer||e.id!==q.id)throw Error("Fila inconsistente.");
@@ -70,12 +73,13 @@ export async function flushMessages(pair:Pair,active:()=>boolean){
    }
   }
   if(!active())return;
-  const result=await c.from("voltara_chat_messages").upsert(e,{onConflict:"id",ignoreDuplicates:true});
+  const result=await c.from("voltara_chat_messages").upsert(e,{onConflict:"id",ignoreDuplicates:true}).select("*").maybeSingle();
   if(result.error)throw result.error;
-  const confirmed=await c.from("voltara_chat_messages").select("ciphertext,has_media,sender_id,recipient_id").eq("id",e.id).single();
-  if(confirmed.error||confirmed.data.ciphertext!==e.ciphertext||confirmed.data.has_media!==e.has_media||confirmed.data.sender_id!==pair.me||confirmed.data.recipient_id!==pair.peer)throw Error("Confirmação da mensagem não corresponde.");
+  // First send returns the committed row in the same request; only retries need a read.
+  const confirmed=result.data?result:await c.from("voltara_chat_messages").select("*").eq("id",e.id).single();
+  if(confirmed.error||confirmed.data.ciphertext!==e.ciphertext||confirmed.data.has_media!==e.has_media||confirmed.data.sender_id!==pair.me||confirmed.data.recipient_id!==pair.peer||confirmed.data.household_id!==pair.house||confirmed.data.id!==e.id)throw Error("Confirmação da mensagem não corresponde.");
   await acknowledge(q.id);
-  if(active())void notifyConnectPush(pair,e.id);
+  if(active()){onConfirmed?.(confirmed.data as Envelope);void notifyConnectPush(pair,e.id);}
  }
 }
 export async function readMedia(key:CryptoKey,e:Envelope,p:ChatPayload){
