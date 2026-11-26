@@ -23,6 +23,7 @@ const validName = (v: unknown, max = 80): v is string =>
 function assertAppliance(raw: unknown): Appliance {
   if (!isObj(raw) || !validName(raw.id, 80) || !validName(raw.name) || !validName(raw.icon, 80) ||
       typeof raw.enabled !== "boolean" || !validNumber(raw.uncertainty, 0, 1) ||
+      (raw.room !== undefined && !isHouseRoom(raw.room)) ||
       (raw.note !== undefined && (typeof raw.note !== "string" || raw.note.length > 500))) {
     throw new Error("Dados inválidos em um aparelho.");
   }
