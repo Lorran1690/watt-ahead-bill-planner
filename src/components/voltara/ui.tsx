@@ -41,7 +41,7 @@ export function NumField({ label, value, onChange, unit, step = 1, min = 0, max,
         <Input
           id={id} type="number" inputMode="decimal" step={step} min={min} max={max}
           value={Number.isFinite(value) ? value : ""}
-          onChange={(e) => { const v = parseFloat(e.target.value); onChange(Number.isFinite(v) ? Math.max(min, max != null ? Math.min(max, v) : v) : 0); }}
+          onChange={(e) => { const v = parseFloat(e.target.value); onChange(Number.isFinite(v) ? Math.max(min, max != null ? Math.min(max, v) : v) : min); }}
           className={cn("h-11 min-w-0 bg-background/60 text-base sm:h-10 sm:text-sm", unit && "pr-16")}
         />
         {unit && <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">{unit}</span>}
