@@ -8,7 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Notice, PageHeader, Panel } from "@/components/voltara/ui";
 import { currentMonthKey, money, monthLong } from "@/lib/voltara/format";
 import { HOUSE_ROOMS, spendByRoom, type HouseRoomId } from "@/lib/voltara/rooms";
-import { useVoltara } from "@/lib/voltara/store";
+import { forecastMonth } from "@/lib/voltara/calc";
+import { useCloudStatus } from "@/lib/voltara/cloud-sync";
+import { setVoltara, useVoltara } from "@/lib/voltara/store";
 
 export const Route = createFileRoute("/casa-3d")({
   head: () => ({ meta: [
@@ -21,6 +23,8 @@ export const Route = createFileRoute("/casa-3d")({
 function House3DPage() {
   const state = useVoltara();
   const [month, setMonth] = useState(() => currentMonthKey());
+  const sync = useCloudStatus();
+  const [deviceId,setDeviceId]=useState<string|null>(null);
   const [selected, setSelected] = useState<HouseRoomId | null>("cozinha");
   const summary = useMemo(() => spendByRoom(state.expenses, month), [state.expenses, month]);
   const totals = useMemo(
@@ -31,6 +35,12 @@ function House3DPage() {
   const activeRecords = selected
     ? monthRecords.filter((item) => item.room === selected).sort((a, b) => b.date.localeCompare(a.date))
     : [];
+  const deviceForecast=useMemo(()=>forecastMonth(state,month).items,[state,month]);
+  const markers=useMemo(()=>state.appliances.flatMap(a=>a.room?[{id:a.id,room:a.room,name:a.name}]:[]),[state.appliances]);
+  const assigned=state.appliances.filter(a=>a.room===selected);
+  const device=assigned.find(a=>a.id===deviceId);
+  const estimate=deviceForecast.find(a=>a.id===deviceId);
+  const canEdit=sync.phase!=="connecting"&&sync.phase!=="empty";
   const activeRoom = HOUSE_ROOMS.find((item) => item.id === selected);
   const activeStat = summary.rooms.find((item) => item.room === selected);
   const withRoom = summary.rooms.reduce((sum, room) => sum + room.count, 0);
@@ -83,7 +93,7 @@ function House3DPage() {
 
       <div className="grid items-start gap-4 xl:grid-cols-5">
         <div className="space-y-3 xl:col-span-3">
-          <House3DScene selected={selected} totals={totals} onSelect={setSelected} />
+          <House3DScene selected={selected} totals={totals} markers={markers} onDeviceSelect={(id,room)=>{setSelected(room);setDeviceId(id);}} onSelect={(room)=>{setSelected(room);setDeviceId(null);}} />
           <div className="-mx-1 flex max-w-full snap-x gap-2 overflow-x-auto overscroll-x-contain px-1 pb-2 sm:flex-wrap">
             {HOUSE_ROOMS.map((room) => (
               <button type="button" key={room.id}
@@ -143,6 +153,24 @@ function House3DPage() {
                 )}
               </>
             ) : <p className="text-sm text-muted-foreground">Selecione um ambiente para ver suas anotações e totais.</p>}
+          </Panel>
+          <Panel title="Aparelhos por ambiente" hint="Associe um aparelho ao cômodo e selecione o marcador na maquete ou na lista.">
+            {selected&&<div className="space-y-3">
+              <label className="block text-sm">Vincular aparelho ao cômodo
+                <select value="" disabled={!canEdit} className="mt-1 min-h-11 w-full rounded-lg border bg-background p-2" onChange={e=>{const id=e.target.value;if(!id)return;setVoltara(s=>({...s,appliances:s.appliances.map(a=>a.id===id?{...a,room:selected}:a)}));setDeviceId(id);}}>
+                  <option value="">Selecione um aparelho</option>{state.appliances.filter(a=>a.room!==selected).map(a=><option key={a.id} value={a.id}>{a.name}{a.room?" (mover)":""}</option>)}
+                </select>
+              </label>
+              {assigned.map((a,i)=><Button key={a.id} className="mr-1 mb-1 max-w-full whitespace-normal h-auto" variant={a.id===deviceId?"default":"outline"} size="sm" onClick={()=>setDeviceId(a.id)}>{i+1}. {a.name}</Button>)}
+              {device&&<div className="rounded-xl border p-3 space-y-2 text-sm">
+                <strong>{device.name}</strong>
+                <p>{device.enabled?"Ativo":"Desativado"} • {estimate?.kwh.toFixed(2)??"0"} kWh/mês • {money(estimate?.cost??0)} estimados</p>
+                <p>{device.kind==="power"?device.watts+" W • "+device.hoursPerDay+" h/dia (rotina detalhada pode variar)":device.kind==="monthly"?device.kwhPerMonth+" kWh de etiqueta/mês":device.kwhPerUse+" kWh por uso • "+device.usesPerWeek+" usos/semana"}</p>
+                <p className="text-xs text-muted-foreground">O custo é estimado pela tarifa configurada, sem duplicar o total da conta.</p>
+                <div className="flex flex-wrap gap-2"><Button asChild size="sm" variant="outline"><Link to="/aparelhos">Editar aparelho</Link></Button><Button asChild size="sm" variant="outline"><Link to="/financas">Manutenção</Link></Button><Button size="sm" variant="ghost" disabled={!canEdit} onClick={()=>{setVoltara(s=>({...s,appliances:s.appliances.map(a=>a.id===device.id?{...a,room:undefined}:a)}));setDeviceId(null);}}>Desvincular</Button></div>
+              </div>}
+              {!assigned.length&&<p className="text-xs text-muted-foreground">Nenhum aparelho associado a este ambiente.</p>}
+            </div>}
           </Panel>
           <Panel title="Como os valores chegam aqui">
             <p className="text-sm leading-relaxed text-muted-foreground">

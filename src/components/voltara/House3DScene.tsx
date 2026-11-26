@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { HOUSE_ROOMS, type HouseRoomId } from "@/lib/voltara/rooms";
 import { money } from "@/lib/voltara/format";
 
+type DeviceMarker={id:string;room:HouseRoomId;name:string};
 interface SceneControls {
+  updateDevices:(items:DeviceMarker[])=>void;
   orbit: (delta: number) => void;
   zoom: (delta: number) => void;
   update: (selected: HouseRoomId | null, totals: Partial<Record<HouseRoomId, number>>) => void;
@@ -14,19 +16,25 @@ interface SceneControls {
  * Cozinha americana e copa não possuem parede entre si.
  */
 export function House3DScene({
-  selected, totals, onSelect,
+  selected, totals, onSelect, markers=[], onDeviceSelect,
 }: {
   selected: HouseRoomId | null;
   totals: Partial<Record<HouseRoomId, number>>;
   onSelect: (room: HouseRoomId) => void;
+  markers?: DeviceMarker[];
+  onDeviceSelect?: (id:string,room:HouseRoomId)=>void;
 }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const controlsRef = useRef<SceneControls | null>(null);
   const onSelectRef = useRef(onSelect);
+  const deviceSelectRef=useRef(onDeviceSelect);
+  const markersRef=useRef(markers);
   const [fallback, setFallback] = useState(false);
   const [ready, setReady] = useState(false);
 
   useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
+  useEffect(()=>{deviceSelectRef.current=onDeviceSelect},[onDeviceSelect]);
+  useEffect(()=>{markersRef.current=markers;controlsRef.current?.updateDevices(markers)},[markers]);
   useEffect(() => { controlsRef.current?.update(selected, totals); }, [selected, totals]);
 
   useEffect(() => {
@@ -238,6 +246,30 @@ export function House3DScene({
           }
         }
 
+        const devices: THREE.Sprite[]=[];
+        function clearDevices(){
+          for(const sprite of devices){scene.remove(sprite);sprite.material.map?.dispose();sprite.material.dispose();}
+          devices.length=0;
+        }
+        function updateDevices(items:DeviceMarker[]){
+          clearDevices();
+          for(const room of HOUSE_ROOMS){
+            const assigned=items.filter(a=>a.room===room.id).slice(0,12);
+            assigned.forEach((item,i)=>{
+              const canvas=document.createElement("canvas");canvas.width=128;canvas.height=128;
+              const ctx=canvas.getContext("2d");if(!ctx)return;
+              ctx.fillStyle="#301d59";ctx.beginPath();ctx.arc(64,64,57,0,Math.PI*2);ctx.fill();
+              ctx.strokeStyle="#cdb4ff";ctx.lineWidth=7;ctx.stroke();ctx.fillStyle="#ffffff";
+              ctx.textAlign="center";ctx.textBaseline="middle";ctx.font="bold 58px sans-serif";ctx.fillText(String(i+1),64,66);
+              const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
+              const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false}));
+              sprite.position.set(room.x-room.width*.32+(i%4)*room.width*.20,2.25,room.z+.6+Math.floor(i/4)*.62);
+              sprite.scale.set(.48,.48,1);sprite.renderOrder=101;sprite.userData={deviceId:item.id,room:item.room};
+              devices.push(sprite);scene.add(sprite);
+            });
+          }
+        }
+
         const raycaster = new THREE.Raycaster();
         const cursor = new THREE.Vector2();
         const pointers = new Map<number, { x: number; y: number }>();
@@ -247,6 +279,8 @@ export function House3DScene({
           const rect = renderer.domElement.getBoundingClientRect();
           cursor.set((x - rect.left) / rect.width * 2 - 1, -(y - rect.top) / rect.height * 2 + 1);
           raycaster.setFromCamera(cursor, camera);
+          const hit=raycaster.intersectObjects(devices)[0];
+          if(hit&&deviceSelectRef.current){deviceSelectRef.current(hit.object.userData.deviceId,hit.object.userData.room);return;}
           const hits = raycaster.intersectObjects(floors);
           const room = hits[0]?.object.userData.room as HouseRoomId | undefined;
           if (room) onSelectRef.current(room);
@@ -327,10 +361,12 @@ export function House3DScene({
         }
         frame = requestAnimationFrame(render);
         update(selected, totals);
+        updateDevices(markersRef.current);
         controlsRef.current = {
           orbit: (delta) => { azimuth += delta; positionCamera(); },
           zoom: (delta) => { radius = THREE.MathUtils.clamp(radius + delta, 11, 34); positionCamera(); },
           update,
+          updateDevices,
         };
         if (!cancelled) setReady(true);
 
@@ -344,6 +380,7 @@ export function House3DScene({
           canvas.removeEventListener("pointerup", up);
           canvas.removeEventListener("pointercancel", up);
           canvas.removeEventListener("wheel", wheel);
+          clearDevices();
           for (const item of made) {
             if (item instanceof THREE.Sprite) (item.material as THREE.SpriteMaterial).map?.dispose();
             if (item instanceof THREE.Mesh) item.geometry.dispose();

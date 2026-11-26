@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getCloudClient } from "./cloud-client";
 import { PUBLIC_APP_ORIGIN } from "./public-url";
 
@@ -57,6 +58,28 @@ export function startFamilyPresence(householdId: string | null): () => void {
   let active = true, busy = false;
   let lastSent = 0;
   let timer: number | undefined;
+  let channel: RealtimeChannel | null = null;
+  let subscribed = false, tracked = false, tracking = false;
+  const realtimeEnabled = import.meta.env.VITE_VOLTARA_PRIVATE_PRESENCE === "true";
+  async function updateTracking() {
+    if (!active || !subscribed || !channel || tracking) return;
+    const desired = state.enabled && document.visibilityState === "visible";
+    if (desired === tracked) return;
+    tracking = true;
+    try {
+      if (desired) {
+        // Authoritative timestamp is written through the authenticated RPC. Presence payload
+        // contains no identity, email, location, or financial data; it only prompts a refresh.
+        const { error } = await client!.rpc("voltara_presence_touch");
+        if (error || !active || !state.enabled || document.hidden) return;
+        lastSent = Date.now();
+        tracked = await channel.track({ active: true }) === "ok";
+      } else {
+        if (await channel.untrack() === "ok") tracked = false;
+      }
+    } catch { /* retain server heartbeat fallback */ }
+    finally { tracking = false; }
+  }
   async function refresh() {
     if (!active || busy || document.visibilityState !== "visible") return;
     busy = true;
@@ -73,12 +96,12 @@ export function startFamilyPresence(householdId: string | null): () => void {
       if (active) publish({ error: "Não foi possível consultar a presença. Os estados estão indisponíveis." });
     } finally { busy = false; }
   }
-  const onVisible = () => { if (document.visibilityState === "visible") void refresh(); };
+  const onVisible = () => { void updateTracking(); if (document.visibilityState === "visible") void refresh(); };
   const onOffline = () => { if (active) publish({ error: "Sem conexão. Presença indisponível." }); };
   const onStorage = (event: StorageEvent) => {
     if (active && preferenceKey && event.key === preferenceKey) {
       publish({ enabled: event.newValue === "yes" });
-      void refresh();
+      void updateTracking(); void refresh();
     }
   };
   async function init() {
@@ -90,10 +113,22 @@ export function startFamilyPresence(householdId: string | null): () => void {
       let enabled = false;
       try { enabled = window.localStorage.getItem(preferenceKey) === "yes"; } catch { /* opt-in inicial */ }
       publish({ enabled, ready: true });
-      wake = () => { void refresh(); };
+      wake = () => { void updateTracking(); void refresh(); };
+      if (realtimeEnabled) {
+        // Private authorization policies must be applied before enabling this feature.
+        channel = client!.channel("voltara:presence:" + householdId, {config:{private:true}})
+          .on("presence", {event:"sync"}, () => { void refresh(); })
+          .on("presence", {event:"join"}, () => { void refresh(); })
+          .on("presence", {event:"leave"}, () => { void refresh(); })
+          .subscribe(status => {
+            if (!active) return;
+            subscribed = status === "SUBSCRIBED"; tracked = false;
+            if (subscribed) { void updateTracking(); void refresh(); }
+          });
+      }
       // One loop polls and sends a heartbeat every 15s when presence is enabled.
       // The server independently rate-limits writes to one per 10 seconds.
-      timer = window.setInterval(() => { void refresh(); }, 15000);
+      timer = window.setInterval(() => { void updateTracking(); void refresh(); }, 15000);
       document.addEventListener("visibilitychange", onVisible);
       window.addEventListener("online", onVisible);
       window.addEventListener("offline", onOffline);
@@ -106,6 +141,8 @@ export function startFamilyPresence(householdId: string | null): () => void {
   void init();
   return () => {
     active = false;
+    if (channel) void client.removeChannel(channel);
+    channel = null;
     if (timer !== undefined) window.clearInterval(timer);
     document.removeEventListener("visibilitychange", onVisible);
     window.removeEventListener("online", onVisible);

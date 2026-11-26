@@ -1,0 +1,14 @@
+import {mkdir,copyFile,readdir,stat} from "node:fs/promises";
+import {resolve,join} from "node:path";
+const out=resolve("public/ocr");
+await mkdir(join(out,"core"),{recursive:true});
+await mkdir(join(out,"lang"),{recursive:true});
+await copyFile("node_modules/tesseract.js/dist/worker.min.js",join(out,"worker.min.js"));
+const core="node_modules/tesseract.js-core";
+const assets=(await readdir(core)).filter(n=>/^tesseract-core.*\.wasm(?:\.js)?$/.test(n));
+if(!assets.some(n=>n.endsWith(".wasm.js")))throw Error("Tesseract core not found");
+for(const name of assets)await copyFile(join(core,name),join(out,"core",name));
+const lang="node_modules/@tesseract.js-data/por/4.0.0_best_int/por.traineddata.gz";
+if((await stat(lang)).size<1000)throw Error("Portuguese traineddata missing");
+await copyFile(lang,join(out,"lang","por.traineddata.gz"));
+console.log("Prepared local OCR assets:",assets.length,"core files and Portuguese language");

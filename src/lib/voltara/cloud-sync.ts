@@ -128,8 +128,8 @@ async function fetchRows(householdId: string): Promise<SharedRecord[]> {
   const client = assertBrowser();
   const output: SharedRecord[] = [];
   // Data API geralmente limita consultas a 1000 linhas; buscar todas as páginas.
-  for (let start = 0; start <= 11000; start += 500) {
-    if (start === 11000) throw new Error("A casa excedeu o limite de registros suportado. Nenhum dado foi substituído.");
+  for (let start = 0; start <= 16000; start += 500) {
+    if (start === 16000) throw new Error("A casa excedeu o limite de registros suportado. Nenhum dado foi substituído.");
     const { data, error } = await client.from("voltara_records")
       .select("kind,record_key,document")
       .eq("household_id", householdId)

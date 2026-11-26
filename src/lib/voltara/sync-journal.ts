@@ -1,6 +1,6 @@
 import { recordId, type RecordChange } from "./cloud-records";
 
-const kinds = new Set(["meta", "appliance", "bill", "expense", "water_bill"]);
+const kinds = new Set(["meta", "appliance", "bill", "expense", "water_bill", "finance"]);
 export type JournalStore = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 export const journalKey = (userId: string, householdId: string) =>
   "voltara:journal:v1:" + userId + ":" + householdId;
@@ -15,7 +15,7 @@ export function readJournal(store: JournalStore, key: string): RecordChange[] {
   const raw = store.getItem(key);
   if (raw === null) return [];
   const value: unknown = JSON.parse(raw);
-  if (!Array.isArray(value) || value.length > 11000) throw new Error("Fila local inválida. Exporte um backup antes de continuar.");
+  if (!Array.isArray(value) || value.length > 16000) throw new Error("Fila local inválida. Exporte um backup antes de continuar.");
   for (const c of value) {
     if (!c || typeof c !== "object" || !kinds.has(c.kind) ||
         typeof c.record_key !== "string" || !c.record_key || c.record_key.length > 80 ||
