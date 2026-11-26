@@ -19,9 +19,9 @@ async function shrink(file:File){
   return canvas;
  }finally{image.close();}
 }
-export function ReceiptScanner(){
+export function ReceiptScanner({initialFile=null}:{initialFile?:File|null} = {}){
  const sync=useCloudStatus();
- const [file,setFile]=useState<File|null>(null);
+ const [file,setFile]=useState<File|null>(initialFile);
  const [busy,setBusy]=useState(false);
  const [progress,setProgress]=useState("");
  const [error,setError]=useState("");
@@ -77,6 +77,7 @@ export function ReceiptScanner(){
  return <Panel title="Scanner de notas e contas" hint="Reconhecimento experimental em português, executado no dispositivo.">
   <Notice>A imagem e o texto bruto não são enviados ao Supabase nem a uma API de IA. Apenas os campos confirmados entram nos seus registros. Não confie automaticamente nos resultados.</Notice>
   <div className="mt-3 space-y-3">
+   {file&&<p className="text-xs text-muted-foreground">Imagem selecionada: {file.name}</p>}
    <Input aria-label="Imagem da nota" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={busy} onChange={e=>{setFile(e.target.files?.[0]??null);setReady(false);setText("");setSaved(false);setProgress("");setError("");}}/>
    <Button disabled={!file||busy} onClick={()=>void scan()}>{busy?"Lendo imagem...":"Reconhecer nota"}</Button>
    {progress&&<p role="status" className="text-sm text-muted-foreground">{progress}</p>}

@@ -4,8 +4,9 @@ import { cloudConfigured, getCloudClient } from "@/lib/voltara/cloud-client";
 import { disconnectAfterAuthLoss, findMyHousehold, startHouseholdSync, getCloudStatus, useCloudStatus } from "@/lib/voltara/cloud-sync";
 import { useHydrated } from "@tanstack/react-router";
 import { startVoltaraPwa } from "@/lib/voltara/pwa";
+import { clearConnectPushOnSignOut } from "@/lib/voltara/connect-push";
 import { startFamilyPresence } from "@/lib/voltara/presence";
-import { CalendarClock, Download, FlaskConical, Droplets, Gauge, House, Menu, Plug, Receipt, Settings, Users, Wallet, ChartPie } from "lucide-react";
+import { CalendarClock, Download, FlaskConical, Droplets, Gauge, House, Menu, Plug, Receipt, Settings, Users, Wallet, ChartPie, MessageCircle } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,7 @@ const NAV = [
   { to: "/configuracoes", label: "Ajustes", icon: Settings },
   { to: "/compartilhar", label: "Compartilhar", icon: Users },
   { to: "/instalar", label: "Instalar app", icon: Download },
+  { to: "/connect", label: "Connect", icon: MessageCircle },
 ] as const;
 
 /** Reconecta à casa em qualquer tela, inclusive ao abrir /gastos diretamente. */
@@ -44,7 +46,7 @@ function FamilyAutoConnect() {
           if (!error || error.name === "AuthSessionMissingError") disconnectAfterAuthLoss();
           return;
         }
-        if (previousUser && previousUser !== user.id) disconnectAfterAuthLoss();
+        if (previousUser && previousUser !== user.id) { void clearConnectPushOnSignOut().catch(() => {}); disconnectAfterAuthLoss(); }
         previousUser = user.id;
         const membership = await findMyHousehold();
         if (!active) return;
@@ -61,6 +63,7 @@ function FamilyAutoConnect() {
     void restore();
     const { data: { subscription } } = client.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") {
+        void clearConnectPushOnSignOut().catch(() => {});
         setTimeout(() => { if (active) { previousUser = null; disconnectAfterAuthLoss(); } }, 0);
       }
       if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
@@ -95,7 +98,7 @@ export function AppShell() {
     return startFamilyPresence(sync.householdId);
   }, [hydrated, sync.householdId]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const MOBILE_NAV = [NAV[0], NAV[1], NAV[2]];
+  const MOBILE_NAV = [NAV[0], NAV[1], NAV[NAV.length - 1]!];
   useEffect(() => {
     if (hydrated) startVoltaraPwa();
   }, [hydrated]);

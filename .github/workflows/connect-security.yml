@@ -1,0 +1,46 @@
+name: Voltara Connect security
+on:
+  pull_request:
+    paths:
+      - 'src/lib/voltara/connect-*'
+      - 'src/routes/connect.tsx'
+      - 'docs/VOLTARA_CONNECT*'
+      - 'scripts/connect-security*'
+      - 'scripts/connect-push-security*'
+      - 'supabase/functions/voltara-connect-push/**'
+      - '.github/workflows/connect-security.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-postgres:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: fixture-only
+          POSTGRES_DB: connect_fixture
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGPASSWORD: fixture-only
+      PGHOST: 127.0.0.1
+      PGUSER: postgres
+      PGDATABASE: connect_fixture
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar cliente PostgreSQL
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Testar políticas em banco descartável
+        run: |
+          psql -v ON_ERROR_STOP=1 -f scripts/connect-security-fixture.sql
+          psql -v ON_ERROR_STOP=1 -f docs/VOLTARA_CONNECT_STAGED.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/connect-security-test.sql
+          psql -v ON_ERROR_STOP=1 -f docs/VOLTARA_CONNECT_PUSH_STAGED.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/connect-push-security-test.sql
