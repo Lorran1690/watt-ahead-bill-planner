@@ -31,6 +31,7 @@ function Contas() {
 
   function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!state.bills.some(b => b.month === month) && state.bills.length >= 240) { setError("Limite de 240 contas de luz atingido."); return; }
     const amount = Number(value.replace(",", "."));
     const hasKwh = consumption.trim() !== "";
     const usedKwh = hasKwh ? Number(consumption.replace(",", ".")) : undefined;
