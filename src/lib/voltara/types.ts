@@ -83,4 +83,6 @@ export interface VoltaraState {
   waterBills: WaterBill[];
   expenses: DailyExpense[];
   residualUncertainty: number;
+  /** Optional extension; v1 backups remain readable. */
+  finance?: import("./finance").FinanceItem[];
 }
