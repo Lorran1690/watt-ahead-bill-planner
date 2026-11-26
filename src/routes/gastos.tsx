@@ -66,6 +66,10 @@ function ExpensesPage() {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (editingId && !state.expenses.some(item => item.id === editingId)) {
+      setError("Este gasto foi removido em outro aparelho. Cancele a edição antes de cadastrar novamente."); setFeedback(""); return;
+    }
+    if (!editingId && state.expenses.length >= 10000) { setError("Limite de 10.000 gastos atingido. Exporte um backup."); setFeedback(""); return; }
     const value = parseExpenseAmount(amount);
     if (!isValidExpenseDate(date)) {
       setError("Informe uma data válida.");
