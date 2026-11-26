@@ -28,3 +28,12 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+
+## Voltara: requisito obrigatório de responsividade
+- Mobile First em cada nova tela ou alteração de interface, preservando desktop.
+- Validar 320, 360, 390, 414, 768 e 1920 px. Não aceitar conteúdo cortado ou rolagem horizontal da página.
+- Campos legíveis, botões principais confortáveis ao toque (44 px), áreas seguras da PWA e diálogos acessíveis. Tabelas extensas podem ter rolagem interna explícita.
+- Connect: verificar o compositor com teclado virtual, anexos, áudio e mensagens longas, sem ocultar ações essenciais.
+- Não alterar dados, autenticação ou segurança para facilitar testes. Usar fixtures isoladas; validar Android e iOS reais antes de declarar compatibilidade completa.
+- Executar os testes de navegador e qualidade antes de incorporar uma alteração visual à main.
