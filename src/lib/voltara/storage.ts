@@ -1,6 +1,7 @@
 import { defaultState } from "./defaults";
 import type { Appliance, Bill, DailyExpense, Settings, VoltaraState, WaterBill } from "./types";
 import { isHouseRoom } from "./rooms";
+import { normalizeFinance } from "./finance";
 
 export const STORAGE_KEY = "voltara:v1";
 export interface KV { getItem(k: string): string | null; setItem(k: string, v: string): void }
@@ -132,7 +133,7 @@ export function normalizeState(raw: unknown): VoltaraState {
   if (!validNumber(residualUncertainty, 0, 1)) {
     throw new Error("Incerteza residual inválida.");
   }
-  return { version: 1, settings, appliances, bills, waterBills, expenses, residualUncertainty };
+  return { version: 1, settings, appliances, bills, waterBills, expenses, residualUncertainty, ...(raw.finance === undefined ? {} : { finance: normalizeFinance(raw.finance) }) };
 }
 
 export function loadState(kv: KV | null): VoltaraState {
