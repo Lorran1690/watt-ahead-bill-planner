@@ -8,7 +8,6 @@ import { journalKey, mergeJournal, readJournal, saveJournal } from "./sync-journ
 import { defaultState } from "./defaults";
 import { getVoltaraSnapshot, setVoltara, subscribeVoltara } from "./store";
 import { parseBackup } from "./storage";
-import type { VoltaraState } from "./types";
 
 const PERSONAL_BACKUP_KEY = "voltara:before-sharing:v1";
 
@@ -36,6 +35,7 @@ let syncingFromRemote = false;
 let pending = 0;
 let syncing = false;
 let connectionGeneration = 0;
+let localRevision = 0;
 let startingHousehold: string | null = null;
 let startPromise: Promise<void> | null = null;
 
@@ -187,9 +187,10 @@ async function refreshFromCloud() {
   syncing = true;
   const id = activeId;
   const generation = connectionGeneration;
+  const revision = localRevision;
   try {
     const rows = await fetchRows(id);
-    if (generation !== connectionGeneration || activeId !== id || journal.length || writing) return;
+    if (generation !== connectionGeneration || revision !== localRevision || activeId !== id || journal.length || writing) return;
     if (rows.length === 0) {
       setStatus({ phase: "empty", message: "A casa não tem dados disponíveis. Confira sua associação antes de editar." });
       return;
@@ -251,6 +252,7 @@ function handleLocalChange() {
   const target = toSharedRecords(getVoltaraSnapshot());
   const changes = diffSharedRecords(lastObserved, target);
   if (!changes.length) return;
+  localRevision++;
   lastObserved = target;
   journal = mergeJournal(journal, changes);
   persistJournal();
@@ -260,6 +262,7 @@ function handleLocalChange() {
 
 function clearActive() {
   connectionGeneration++;
+  localRevision++;
   const client = getCloudClient();
   unsubscribeLocal?.();
   unsubscribeLocal = null;
@@ -381,21 +384,47 @@ export async function retryHouseholdSync() {
   }
 }
 
+/** Recovery is explicit, requires an online authorized read, and preserves a recovery copy. */
+export async function discardPendingChanges(): Promise<void> {
+  if (!activeId || !activeJournalKey || writing || syncing || !journal.length)
+    throw new Error("Aguarde a sincronização ou reconecte a casa antes de recuperar.");
+  const id = activeId;
+  const key = activeJournalKey;
+  const generation = connectionGeneration;
+  const revision = localRevision;
+  const membership = await findMyHousehold();
+  if (membership?.id !== id) throw new Error("Seu vínculo com a casa não foi confirmado.");
+  const rows = await fetchRows(id);
+  if (generation !== connectionGeneration || revision !== localRevision || writing || syncing || !rows.length)
+    throw new Error("A casa mudou durante a recuperação. Tente novamente.");
+  fromSharedRecords(rows);
+  // Refuse to discard when a durable recovery copy cannot be saved.
+  window.localStorage.setItem(key + ":recovery", JSON.stringify(getVoltaraSnapshot()));
+  saveJournal(window.localStorage, key, []);
+  journal = [];
+  pending = 0;
+  applyRemote(rows);
+  setStatus({ phase: "online", pending: 0, message: "Histórico da nuvem restaurado. Uma cópia local de recuperação foi preservada." });
+}
+
+export function disconnectAfterAuthLoss() {
+  if (status.phase === "local") return;
+  clearActive();
+  let restore = defaultState();
+  try {
+    const previous = window.localStorage.getItem(PERSONAL_BACKUP_KEY);
+    if (previous) restore = parseBackup(previous);
+  } catch { /* não manter a casa anterior visível após sair */ }
+  setVoltara(restore);
+  // Other tabs may still need the backup after an auth event.
+}
+
 export async function signOutFamily(): Promise<void> {
-  if (journal.length || writing) throw new Error("Há alterações pendentes. Sincronize ou exporte um backup antes de sair.");
+  if (journal.length || writing) throw new Error("Há alterações pendentes. Sincronize ou use a recuperação da fila antes de sair.");
   const client = getCloudClient();
   if (client) {
     const { error } = await client.auth.signOut();
     if (error) throw error;
   }
-  clearActive();
-  let restore: VoltaraState = defaultState();
-  try {
-    const previous = window.localStorage.getItem(PERSONAL_BACKUP_KEY);
-    if (previous) restore = parseBackup(previous);
-  } catch {
-    // Evita manter os lançamentos da casa compartilhada em sessão encerrada.
-  }
-  setVoltara(restore);
-  try { window.localStorage.removeItem(PERSONAL_BACKUP_KEY); } catch { /* armazenamento indisponível */ }
+  disconnectAfterAuthLoss();
 }
