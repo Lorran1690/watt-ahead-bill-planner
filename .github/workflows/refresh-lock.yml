@@ -1,7 +1,7 @@
 name: Atualizar lockfile de dependências
 on:
   push:
-    branches: [main]
+    branches: [main, 'feature/voltara-financas-v2']
     paths:
       - package.json
 permissions:
@@ -22,6 +22,6 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add bun.lock
-            git commit -m "chore: atualizar bun.lock para SDK de sincronização"
-            git push origin HEAD:main
+            git commit -m "chore: atualizar bun.lock para dependências do Voltara"
+            git push origin "HEAD:$GITHUB_REF_NAME"
           fi
