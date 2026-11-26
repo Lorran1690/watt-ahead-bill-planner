@@ -4,6 +4,7 @@ import { cloudConfigured, getCloudClient } from "@/lib/voltara/cloud-client";
 import { disconnectAfterAuthLoss, findMyHousehold, startHouseholdSync, getCloudStatus, useCloudStatus } from "@/lib/voltara/cloud-sync";
 import { useHydrated } from "@tanstack/react-router";
 import { startVoltaraPwa } from "@/lib/voltara/pwa";
+import { clearConnectPushOnSignOut } from "@/lib/voltara/connect-push";
 import { startFamilyPresence } from "@/lib/voltara/presence";
 import { CalendarClock, Download, FlaskConical, Droplets, Gauge, House, Menu, Plug, Receipt, Settings, Users, Wallet, ChartPie, MessageCircle } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -62,6 +63,7 @@ function FamilyAutoConnect() {
     void restore();
     const { data: { subscription } } = client.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") {
+        void clearConnectPushOnSignOut().catch(() => {});
         setTimeout(() => { if (active) { previousUser = null; disconnectAfterAuthLoss(); } }, 0);
       }
       if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
