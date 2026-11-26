@@ -11,6 +11,7 @@ import { download, expensesCsv, historyCsv, projectionCsv, waterHistoryCsv } fro
 import { currentMonthKey } from "@/lib/voltara/format";
 import { parseBackup } from "@/lib/voltara/storage";
 import { setVoltara, useVoltara } from "@/lib/voltara/store";
+import { getCloudStatus, useCloudStatus } from "@/lib/voltara/cloud-sync";
 import type { Settings } from "@/lib/voltara/types";
 
 export const Route = createFileRoute("/configuracoes")({
@@ -23,6 +24,8 @@ export const Route = createFileRoute("/configuracoes")({
 
 function SettingsPage() {
   const state = useVoltara();
+  const sync = useCloudStatus();
+  const sharing = sync.phase !== "local";
   const settings = state.settings;
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
@@ -38,6 +41,10 @@ function SettingsPage() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    if (getCloudStatus().phase !== "local") {
+      setError("Saia da casa compartilhada antes de importar um backup local.");
+      return;
+    }
     if (file.size > 2_000_000) {
       setError("Arquivo muito grande. O backup deve ter no máximo 2 MB.");
       setFeedback("");
@@ -45,6 +52,7 @@ function SettingsPage() {
     }
     try {
       const parsed = parseBackup(await file.text());
+      if (getCloudStatus().phase !== "local") throw new Error("Casa conectada durante a importação.");
       setVoltara(parsed);
       setResetPending(false);
       setError("");
@@ -56,6 +64,7 @@ function SettingsPage() {
   }
 
   function reset() {
+    if (getCloudStatus().phase !== "local") { setError("Saia da casa compartilhada antes de restaurar os dados locais."); return; }
     if (!resetPending) {
       setResetPending(true);
       return;
@@ -140,7 +149,7 @@ function SettingsPage() {
           </div>
         </Panel>
 
-        <Panel title="Backup e exportação" hint="Seus dados ficam salvos neste navegador, sem login nem nuvem">
+        <Panel title="Backup e exportação" hint={sharing ? "Exporte uma cópia da casa. Importações e restauração exigem modo local." : "Seus dados ficam salvos neste navegador."}>
           <div className="space-y-3">
             <Button type="button" variant="outline" className="w-full justify-start"
               onClick={() => download("voltara-backup.json", JSON.stringify(state, null, 2), "application/json;charset=utf-8")}>
@@ -164,7 +173,7 @@ function SettingsPage() {
             </Button>
             <div className="space-y-1.5 border-t pt-3">
               <Label htmlFor="import-backup"><Upload className="mr-1 inline size-4" /> Importar backup JSON</Label>
-              <Input id="import-backup" type="file" accept=".json,application/json" onChange={importJson}
+              <Input id="import-backup" type="file" accept=".json,application/json" disabled={sharing} onChange={importJson}
                 className="cursor-pointer file:cursor-pointer" />
               <p className="text-xs leading-relaxed text-muted-foreground">
                 Importar substitui o perfil e o histórico atuais. Exporte um backup antes.
@@ -183,7 +192,7 @@ function SettingsPage() {
           Isso também apagará as contas de luz e água, os gastos diários e os aparelhos personalizados. Faça backup antes.
         </p>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant={resetPending ? "destructive" : "outline"} onClick={reset}>
+          <Button type="button" variant={resetPending ? "destructive" : "outline"} disabled={sharing} onClick={reset}>
             <RotateCcw className="mr-2 size-4" />{resetPending ? "Confirmar limpeza de todos os dados" : "Restaurar padrão"}
           </Button>
           {resetPending && <Button type="button" variant="ghost" onClick={() => setResetPending(false)}>Cancelar</Button>}
