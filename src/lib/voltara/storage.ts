@@ -121,6 +121,7 @@ export function normalizeState(raw: unknown): VoltaraState {
   if (new Set(appliances.map((a) => a.id)).size !== appliances.length ||
       appliances.some((a) => a.id === "outros") ||
       new Set(bills.map((b) => b.month)).size !== bills.length ||
+      new Set(bills.map((b) => b.id)).size !== bills.length ||
       new Set(waterBills.map((b) => b.month)).size !== waterBills.length ||
       new Set(waterBills.map((b) => b.id)).size !== waterBills.length ||
       new Set(expenses.map((e) => e.id)).size !== expenses.length) {
