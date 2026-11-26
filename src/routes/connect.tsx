@@ -14,6 +14,7 @@ import {ReceiptScanner} from "@/components/voltara/ReceiptScanner";
 import {loadPair,listMessages,listReceipts,markRead,typing,peerTyping,queueMessage,flushMessages,readMedia,compressPhoto,type Pair} from "@/lib/voltara/connect-api";
 import {newPairSecret,pairScope,unlockPair,openMessage,type ChatPayload,type Envelope} from "@/lib/voltara/connect-crypto";
 import {queued} from "@/lib/voltara/connect-queue";
+import {pushConfigured,subscribeConnectPush,unsubscribeConnectPush} from "@/lib/voltara/connect-push";
 
 export const Route=createFileRoute("/connect")({head:()=>({meta:[{title:"Voltara Connect"}]}),component:ConnectPage});
 
@@ -80,6 +81,8 @@ function Conversation({pair}:{pair:Pair}){
  const [recording,setRecording]=useState(false);
  const [olderAvailable,setOlderAvailable]=useState(true);
  const [notifications,setNotifications]=useState(false);
+ const [pushActive,setPushActive]=useState(false);
+ const [pushBusy,setPushBusy]=useState(false);
  const [favorite,setFavorite]=useState<string[]>([]);
  const [pinned,setPinned]=useState<string[]>([]);
  const [selectedExpense,setSelectedExpense]=useState("");
@@ -234,6 +237,10 @@ function Conversation({pair}:{pair:Pair}){
    });
   }catch(e){report(e);}
  }
+ async function togglePush(){
+  if(pushBusy)return;setPushBusy(true);setError("");
+  try{if(pushActive){await unsubscribeConnectPush(pair);setPushActive(false);}else{await subscribeConnectPush(pair);setPushActive(true);notificationRef.current=false;setNotifications(false);}}catch(e){report(e);}finally{if(alive.current)setPushBusy(false);}
+ }
  async function enableNotifications(){
   if(!("Notification" in window))return report(Error("Notificações não disponíveis."));
   const permission=await Notification.requestPermission();setNotifications(permission==="granted");notificationRef.current=permission==="granted";
@@ -308,8 +315,8 @@ function Conversation({pair}:{pair:Pair}){
     </div>
    </form>
    <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={typingAllowed} onChange={e=>setTypingAllowed(e.target.checked)}/>Compartilhar indicador de digitação</label>
-   <Button size="sm" variant="outline" onClick={()=>void enableNotifications()}>{notifications?"Avisos locais autorizados":"Autorizar avisos de novas mensagens"}</Button>
-   <p className="text-xs text-muted-foreground">Avisos enquanto a conversa estiver aberta; push com aplicativo fechado ainda não configurado. Busca e galeria abrangem apenas mensagens carregadas. Favoritos e fixados são locais.</p>
+   <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={pushActive} onClick={()=>void enableNotifications()}>{notifications?"Avisos locais autorizados":"Autorizar avisos locais"}</Button>{pushConfigured&&<Button size="sm" variant="outline" disabled={pushBusy} onClick={()=>void togglePush()}>{pushActive?"Desativar push":"Ativar notificações push"}</Button>}</div>
+   <p className="text-xs text-muted-foreground">Avisos locais enquanto a conversa estiver aberta. {pushConfigured?"Push requer autorização e suporte do aparelho.":"Push com aplicativo fechado aguarda configuração do servidor."} Busca e galeria abrangem apenas mensagens carregadas. Favoritos e fixados são locais.</p>
   </Panel>
   <Panel title="Compartilhar gasto existente" hint="Envia somente o resumo escolhido, não cria um novo lançamento.">
    <select aria-label="Gasto para compartilhar" className="w-full rounded-lg border bg-background p-2 text-sm" value={selectedExpense} onChange={e=>setSelectedExpense(e.target.value)}><option value="">Selecione um gasto</option>{state.expenses.slice(-100).map(e=><option key={e.id} value={e.id}>{e.note||"Gasto"} · {money(e.amount)}</option>)}</select>
