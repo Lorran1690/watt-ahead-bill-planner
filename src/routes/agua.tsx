@@ -66,6 +66,9 @@ function WaterPage() {
     if (cleanNote.length > 240) {
       setError("A anotação deve ter no máximo 240 caracteres."); return;
     }
+    if (editingId && !state.waterBills.some(bill => bill.id === editingId)) {
+      setError("Esta fatura foi removida em outro aparelho. Cancele a edição e cadastre novamente."); return;
+    }
     const existing = state.waterBills.find((bill) => bill.month === month);
     if (existing && existing.id !== editingId) {
       setError("Esse mês já está cadastrado. Use Editar no histórico para alterá-lo."); return;
@@ -160,7 +163,7 @@ function WaterPage() {
           <form onSubmit={submit} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="water-month">Mês de referência</Label>
-              <Input id="water-month" type="month" value={month} required
+              <Input id="water-month" type="month" value={month} required disabled={editingId !== null}
                 onChange={(event) => setMonth(event.target.value)} />
             </div>
             <div className="space-y-1.5">
