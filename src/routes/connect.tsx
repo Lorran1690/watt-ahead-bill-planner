@@ -10,6 +10,7 @@ import {useFamilyPresence,presenceLabel} from "@/lib/voltara/presence";
 import {useVoltara,setVoltara} from "@/lib/voltara/store";
 import {parseCents,financeSchema} from "@/lib/voltara/finance";
 import {money} from "@/lib/voltara/format";
+import {ConnectAudio} from "@/components/voltara/ConnectAudio";
 import {ReceiptScanner} from "@/components/voltara/ReceiptScanner";
 import {loadPair,listMessages,listReceipts,markRead,typing,peerTyping,queueMessage,flushMessages,readMedia,compressPhoto,type Pair} from "@/lib/voltara/connect-api";
 import {newPairSecret,pairScope,unlockPair,openMessage,type ChatPayload,type Envelope} from "@/lib/voltara/connect-crypto";
@@ -355,7 +356,7 @@ function Conversation({pair}:{pair:Pair}){
    {pending>0&&<div role="status" className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span>{pending} mensagem(ns) na fila criptografada.</span><Button size="sm" variant="ghost" onClick={()=>void flush()}>Tentar enviar</Button></div>}
    {error&&<p role="alert" className="text-sm text-destructive">{error}</p>}
    {reply&&<div className="text-xs flex items-center gap-2">Respondendo: <span className="truncate">{views.find(v=>v.row.id===reply)?.payload?.text||"Mensagem"}</span><Button size="sm" variant="ghost" onClick={()=>setReply(undefined)}>Cancelar</Button></div>}
-   {draft&&<div className="rounded-lg border p-2 space-y-2">{draft.kind==="image"?<img src={preview} alt="Prévia da foto" className="max-h-40 rounded-lg"/>:<audio src={preview} controls className="w-full max-w-full"/>}<Button size="sm" variant="outline" onClick={()=>setDraft(null)}>Remover anexo</Button></div>}
+   {draft&&<div className="rounded-lg border p-2 space-y-2">{draft.kind==="image"?<img src={preview} alt="Prévia da foto" className="max-h-40 rounded-lg"/>:<ConnectAudio url={preview}/>}<Button size="sm" variant="outline" onClick={()=>setDraft(null)}>Remover anexo</Button></div>}
    <form className="sticky bottom-0 z-10 space-y-2 rounded-xl border bg-card p-2 shadow-lg" onSubmit={e=>void send(e)}>
     <textarea ref={composerRef} aria-label="Mensagem" rows={1} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.nativeEvent.isComposing&&window.matchMedia("(pointer:fine)").matches){e.preventDefault();void send();}}} className="w-full resize-none rounded-xl border bg-background p-3 text-sm" placeholder="Digite sua mensagem..." maxLength={4000} value={text} onChange={e=>{setText(e.target.value);if(typingAllowed&&e.target.value.trim()&&Date.now()-lastTyping.current>3000){lastTyping.current=Date.now();void typing(pair).catch(()=>{});}}}/>
     <div className="flex flex-wrap gap-2">
@@ -389,7 +390,7 @@ function Media({row,payload,cryptoKey,onScan}:{row:Envelope;payload:ChatPayload;
   try{const b=await readMedia(cryptoKey,row,payload);if(active.current)setBlob(b);}catch{if(active.current)setError("Não foi possível abrir o anexo cifrado.");}finally{if(active.current)setBusy(false)}
  }
  return <div className="mt-2 space-y-2 min-w-0">
-  {!blob?<Button size="sm" variant="outline" disabled={busy} onClick={()=>void load()}>{busy?"Abrindo...":payload.media?.kind==="image"?"Abrir foto":"Ouvir áudio"}</Button>:payload.media?.kind==="image"?<><img src={url} alt="Foto compartilhada" className="max-h-64 max-w-full rounded-lg object-contain"/><Button size="sm" variant="outline" onClick={()=>onScan(new File([blob],"connect-"+row.id+".jpg",{type:"image/jpeg"}))}>Ler no scanner</Button></>:<audio controls autoPlay src={url} preload="metadata" className="w-full max-w-full"/>}
+  {!blob?<Button size="sm" variant="outline" disabled={busy} onClick={()=>void load()}>{busy?"Abrindo...":payload.media?.kind==="image"?"Abrir foto":"Ouvir áudio"}</Button>:payload.media?.kind==="image"?<><img src={url} alt="Foto compartilhada" className="max-h-64 max-w-full rounded-lg object-contain"/><Button size="sm" variant="outline" onClick={()=>onScan(new File([blob],"connect-"+row.id+".jpg",{type:"image/jpeg"}))}>Ler no scanner</Button></>:<ConnectAudio url={url} autoPlay/>}
   {error&&<p className="text-xs text-destructive">{error}</p>}
  </div>;
 }
