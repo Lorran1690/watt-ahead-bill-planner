@@ -60,13 +60,33 @@ export interface RecordChange {
   document?: Record<string, unknown>;
 }
 
+// JSONB may return object properties in a different order than the browser.
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object") {
+    const object = value as Record<string, unknown>;
+    return Object.fromEntries(Object.keys(object).sort().filter(k => object[k] !== undefined).map(k => [k, canonical(object[k])]));
+  }
+  return value;
+}
+
+export function overlayRecordChanges(records: SharedRecord[], changes: RecordChange[]): SharedRecord[] {
+  const map = toRecordMap(records);
+  for (const change of changes) {
+    const key = recordId(change);
+    if (change.operation === "delete") map.delete(key);
+    else if (change.document) map.set(key, { kind: change.kind, record_key: change.record_key, document: change.document });
+  }
+  return [...map.values()];
+}
+
 export function diffSharedRecords(before: SharedRecord[], after: SharedRecord[]): RecordChange[] {
   const oldMap = toRecordMap(before);
   const newMap = toRecordMap(after);
   const changes: RecordChange[] = [];
   for (const [key, next] of newMap) {
     const old = oldMap.get(key);
-    if (!old || JSON.stringify(old.document) !== JSON.stringify(next.document)) {
+    if (!old || JSON.stringify(canonical(old.document)) !== JSON.stringify(canonical(next.document))) {
       changes.push({ operation: "upsert", ...next });
     }
   }
