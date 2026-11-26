@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Wallet, CalendarDays, CreditCard, ShoppingCart, Wrench, Gauge, Bell, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ActivityHistory } from "@/components/voltara/ActivityHistory";
 import { PageHeader, Panel, Notice, Stat } from "@/components/voltara/ui";
 import { setVoltara, useVoltara } from "@/lib/voltara/store";
 import { useCloudStatus, retryHouseholdSync } from "@/lib/voltara/cloud-sync";
@@ -14,7 +15,7 @@ export const Route = createFileRoute("/financas")({head:()=>({meta:[{title:"Fina
 const tabs = [
   ["overview","Visão geral",Wallet],["income","Receitas",Wallet],["budget","Orçamento",Gauge],
   ["payable","Calendário",CalendarDays],["card","Cartões",CreditCard],["shopping","Compras",ShoppingCart],
-  ["maintenance","Manutenção",Wrench],["meter","Medidores",Gauge],["alerts","Avisos",Bell],["diagnostic","Diagnóstico",Activity],
+  ["maintenance","Manutenção",Wrench],["meter","Medidores",Gauge],["alerts","Avisos",Bell],["history","Histórico",Activity],["diagnostic","Diagnóstico",Activity],
 ] as const;
 type Tab=typeof tabs[number][0];
 const field = "w-full min-w-0 rounded-lg border bg-background px-3 py-2 text-sm min-h-11";
@@ -149,6 +150,7 @@ function FinancePage(){
     {tab==="maintenance"&&<Panel title="Manutenção e garantias">{form("maintenance",<>{input("title","Equipamento / tarefa","text",editMaintenance?.title??"",{maxLength:120})}{input("date","Data de revisão / garantia","date",editMaintenance?.due??today)}{input("note","Observação","text",editMaintenance?.note??"",{maxLength:240,required:false})}</>)}{itemsOf(all,"maintenance").map(p=>row(p,p.title,p.due+" • "+p.note,<label className="flex items-center gap-1 text-xs"><input type="checkbox" disabled={locked} checked={p.done} onChange={e=>act(()=>save({...p,done:e.target.checked}))}/> Concluída</label>,!p.done))}</Panel>}
     {tab==="meter"&&<Panel title="Leituras de energia e água" hint="Registre o valor acumulado no relógio/hidrômetro. Redução ou troca do medidor exige revisão.">{form("meter",<><label className="grid gap-1 text-sm text-muted-foreground">Medidor<select name="meter" className={field}><option value="energy">Energia (kWh)</option><option value="water">Água (m³)</option></select></label>{input("date","Data da leitura","date",today)}{input("reading","Leitura acumulada")}</>)}{itemsOf(all,"meter").map(p=>row(p,p.meter==="energy"?"Energia":"Água",p.date+" • "+p.value))}{(["energy","water"] as const).map(m=><div className="mt-4" key={m}><h3 className="font-semibold">{m==="energy"?"Energia (kWh)":"Água (m³)"}</h3>{meterIntervals(all,m).map(r=><p key={r.to} className="text-sm py-1">{r.from} a {r.to}: {r.consumption===null?"Leitura precisa de revisão":r.consumption.toFixed(3)+" • média/dia "+(r.consumption/r.days).toFixed(2)}</p>)}</div>)}</Panel>}
     {tab==="alerts"&&<Panel title="Central de avisos" hint="Avisos locais calculados no app aberto; ainda não são notificações push."><div className="space-y-2">{overdue.map(c=><Notice key={c.sourceId} tone="warn">{c.title} atrasada desde {c.due}: {cash(c.cents-c.paid)}</Notice>)}{upcoming.map(c=><Notice key={c.sourceId}>{c.title} vence em {c.due}: {cash(c.cents-c.paid)}</Notice>)}{budgets.filter(b=>summary.spending[b.category]>=b.cents*.8).map(b=><Notice key={b.id} tone="warn">{b.category} já utilizou {Math.round(summary.spending[b.category]/b.cents*100)}% do orçamento.</Notice>)}{itemsOf(all,"maintenance").filter(p=>!p.done&&p.due<=today).map(p=><Notice key={p.id} tone="warn">Revisão pendente: {p.title}</Notice>)}<p className="text-xs text-muted-foreground">Confira as contas do mês selecionado. Avisos não substituem o calendário.</p></div></Panel>}
+    {tab==="history"&&<ActivityHistory/>}
     {tab==="diagnostic"&&<Panel title="Diagnóstico de conexão"><div className="grid grid-cols-2 gap-3"><Stat label="Versão" value="Finanças v2 (prévia)"/><Stat label="Sincronização" value={sync.phase}/><Stat label="Pendências" value={sync.pending}/><Stat label="Registros financeiros" value={all.length}/></div><p className="mt-3 break-words text-sm text-muted-foreground">{sync.message||"Nenhum erro informado."}</p><div className="flex flex-wrap gap-2 mt-3"><Button onClick={()=>void retryHouseholdSync().catch(()=>setError("Não foi possível reconectar."))}>Tentar sincronizar</Button><Button asChild variant="outline"><Link to="/compartilhar">Compartilhar</Link></Button><Button asChild variant="outline"><Link to="/configuracoes">Backup</Link></Button></div></Panel>}
   </div>;
 }
