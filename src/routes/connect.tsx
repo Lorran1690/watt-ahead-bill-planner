@@ -113,7 +113,7 @@ function Conversation({pair}:{pair:Pair}){
   }catch(e){report(e);}
  }
  function lock(){
-  stopRecording(true);setKey(null);setRows([]);setViews([]);setSecret("");setFingerprint("");setText("");setDraft(null);setScanFile(null);setReply(undefined);setFilter("");setSelectedExpense("");setRead(new Set());seen.current.clear();known.current=null;
+  stopRecording(true);setKey(null);setRows([]);setViews([]);setSecret("");setFingerprint("");setText("");setDraft(null);setScanFile(null);setReply(undefined);setFilter("");setSelectedExpense("");setRecording(false);setRead(new Set());seen.current.clear();known.current=null;
  }
  async function refresh(){
   if(!alive.current||refreshBusy.current)return;
@@ -172,7 +172,7 @@ function Conversation({pair}:{pair:Pair}){
   }catch(e){report(e);}
  }
  async function send(e?:FormEvent,financial?:ChatPayload["financial"]){
-  e?.preventDefault();if(!key||sending||(!text.trim()&&!draft&&!financial))return;
+  e?.preventDefault();if(!key||sending||recording||(!text.trim()&&!draft&&!financial))return;
   setSending(true);setError("");
   try{
    const payload:ChatPayload={text:text.trim(),...(reply?{reply}:{}),...(draft?{media:{kind:draft.kind,mime:draft.mime,size:draft.blob.size}}:{}),...(financial?{financial}:{})};
@@ -235,7 +235,7 @@ function Conversation({pair}:{pair:Pair}){
  }
  const visible=views.filter(v=>mode!=="media"||v.payload?.media).filter(v=>mode!=="favorites"||favorite.includes(v.row.id)).filter(v=>!filter||((v.payload?.text??"")+" "+(v.payload?.financial?.label??"")).toLocaleLowerCase("pt-BR").includes(filter.toLocaleLowerCase("pt-BR")));
  useEffect(()=>{
-  if(!key||!views.length||!document.visibilityState||document.hidden)return;
+  if(!key||!views.length)return;
   const observer=new IntersectionObserver(entries=>{
    if(document.hidden)return;
    for(const entry of entries){
@@ -290,7 +290,7 @@ function Conversation({pair}:{pair:Pair}){
    {error&&<p role="alert" className="text-sm text-destructive">{error}</p>}
    {reply&&<div className="text-xs flex items-center gap-2">Respondendo: <span className="truncate">{views.find(v=>v.row.id===reply)?.payload?.text||"Mensagem"}</span><Button size="sm" variant="ghost" onClick={()=>setReply(undefined)}>Cancelar</Button></div>}
    {draft&&<div className="rounded-lg border p-2 space-y-2">{draft.kind==="image"?<img src={preview} alt="Prévia da foto" className="max-h-40 rounded-lg"/>:<audio src={preview} controls className="w-full max-w-full"/>}<Button size="sm" variant="outline" onClick={()=>setDraft(null)}>Remover anexo</Button></div>}
-   <form className="space-y-2" onSubmit={send}>
+   <form className="space-y-2" onSubmit={e=>void send(e)}>
     <textarea aria-label="Mensagem" rows={2} className="w-full resize-none rounded-xl border bg-background p-3 text-sm" placeholder="Digite sua mensagem..." maxLength={4000} value={text} onChange={e=>{setText(e.target.value);if(typingAllowed&&e.target.value.trim()&&Date.now()-lastTyping.current>3000){lastTyping.current=Date.now();void typing(pair).catch(()=>{});}}}/>
     <div className="flex flex-wrap gap-2">
      <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e=>{void choosePhoto(e.target.files?.[0]);e.target.value="";}}/>
