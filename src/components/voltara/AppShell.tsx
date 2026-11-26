@@ -5,6 +5,7 @@ import { disconnectAfterAuthLoss, findMyHousehold, startHouseholdSync, getCloudS
 import { useHydrated } from "@tanstack/react-router";
 import { startVoltaraPwa } from "@/lib/voltara/pwa";
 import { clearConnectPushOnSignOut } from "@/lib/voltara/connect-push";
+import { useConnectUnread } from "@/lib/voltara/connect-unread";
 import { startFamilyPresence } from "@/lib/voltara/presence";
 import { CalendarClock, Download, FlaskConical, Droplets, Gauge, House, Menu, Plug, Receipt, Settings, Users, Wallet, ChartPie, MessageCircle } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -97,6 +98,8 @@ export function AppShell() {
     if (!hydrated) return;
     return startFamilyPresence(sync.householdId);
   }, [hydrated, sync.householdId]);
+  const unread = useConnectUnread(sync.householdId, hydrated);
+  const unreadBadge = (to: string) => to === "/connect" && unread > 0 ? <span aria-label={unread+" mensagens não lidas"} className="absolute -right-2 -top-1 rounded-full bg-primary px-1 min-w-4 text-center text-[10px] font-bold text-primary-foreground">{unread > 99 ? "99+" : unread}</span> : null;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const MOBILE_NAV = [NAV[0], NAV[1], NAV[NAV.length - 1]!];
   useEffect(() => {
@@ -116,7 +119,7 @@ export function AppShell() {
             <Link key={to} to={to} activeOptions={{ exact: to === "/" }}
               className="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground data-[status=active]:bg-sidebar-accent data-[status=active]:text-sidebar-foreground"
               title={label}>
-              <Icon className="size-5 shrink-0 group-data-[status=active]:text-primary" aria-hidden />
+              <span className="relative shrink-0"><Icon className="size-5 group-data-[status=active]:text-primary" aria-hidden />{unreadBadge(to)}</span>
               <span className="hidden lg:inline">{label}</span>
             </Link>
           ))}
@@ -151,7 +154,7 @@ export function AppShell() {
         {MOBILE_NAV.map(({ to, label, icon: Icon }) => (
           <Link key={to} to={to} activeOptions={{ exact: to === "/" }}
             className={cn("flex min-h-[62px] min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-center text-[12px] font-medium text-muted-foreground transition-colors data-[status=active]:bg-sidebar-accent data-[status=active]:text-primary")}>
-            <Icon className="size-5 shrink-0" aria-hidden />
+            <span className="relative shrink-0"><Icon className="size-5" aria-hidden />{unreadBadge(to)}</span>
             <span className="max-w-full truncate">{label}</span>
           </Link>
         ))}
@@ -174,7 +177,7 @@ export function AppShell() {
               <Link key={to} to={to} activeOptions={{ exact: to === "/" }}
                 onClick={() => setMobileMenuOpen(false)}
                 className="flex min-h-14 min-w-0 items-center gap-3 rounded-xl border border-border bg-card px-3 py-3 text-sm font-medium text-foreground hover:bg-accent data-[status=active]:border-primary/60 data-[status=active]:bg-primary/15 data-[status=active]:text-primary">
-                <Icon className="size-5 shrink-0" aria-hidden />
+                <span className="relative shrink-0"><Icon className="size-5" aria-hidden />{unreadBadge(to)}</span>
                 <span className="min-w-0 break-words">{label}</span>
               </Link>
             ))}
