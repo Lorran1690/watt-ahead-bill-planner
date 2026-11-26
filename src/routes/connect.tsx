@@ -86,6 +86,8 @@ function Conversation({pair}:{pair:Pair}){
  const [typingAllowed,setTypingAllowed]=useState(false);
  const [isTyping,setIsTyping]=useState(false);
  const [recording,setRecording]=useState(false);
+ const [recordSeconds,setRecordSeconds]=useState(0);
+ useEffect(()=>{if(!recording){setRecordSeconds(0);return;}const started=performance.now();const timer=window.setInterval(()=>setRecordSeconds(Math.min(120,Math.floor((performance.now()-started)/1000))),250);return()=>clearInterval(timer);},[recording]);
  const [olderAvailable,setOlderAvailable]=useState(true);
  const [notifications,setNotifications]=useState(false);
  const [pushActive,setPushActive]=useState(false);
@@ -364,7 +366,7 @@ function Conversation({pair}:{pair:Pair}){
      <input ref={cameraInput} type="file" accept="image/*" capture="environment" hidden onChange={e=>{void choosePhoto(e.target.files?.[0]);e.target.value="";}}/>
      <Button type="button" size="icon" variant="ghost" aria-label="Anexar foto" title="Anexar foto" disabled={recording||micStarting||!verified} onClick={()=>fileInput.current?.click()}><Paperclip className="size-5"/></Button>
      <Button type="button" size="icon" variant="ghost" aria-label="Câmera" title="Câmera" disabled={recording||micStarting||!verified} onClick={()=>cameraInput.current?.click()}><Camera className="size-5"/></Button>
-     {recording?<><Button type="button" size="sm" onClick={()=>stopRecording()}>Parar gravação</Button><Button type="button" size="sm" variant="ghost" onClick={()=>stopRecording(true)}>Cancelar áudio</Button></>:<Button type="button" size="icon" variant="ghost" aria-label="Gravar áudio" title="Gravar áudio" disabled={!!draft||micStarting||!verified} onClick={()=>void startRecording()}><Mic className="size-5"/></Button>}
+     {recording?<><span role="status" className="flex items-center gap-1 text-xs text-destructive"><span className="size-2 rounded-full bg-destructive animate-pulse"/> {Math.floor(recordSeconds/60)}:{String(recordSeconds%60).padStart(2,"0")} / 2:00</span><Button type="button" size="sm" onClick={()=>stopRecording()}>Parar gravação</Button><Button type="button" size="sm" variant="ghost" onClick={()=>stopRecording(true)}>Cancelar áudio</Button></>:<Button type="button" size="icon" variant="ghost" aria-label="Gravar áudio" title="Gravar áudio" disabled={!!draft||micStarting||!verified} onClick={()=>void startRecording()}><Mic className="size-5"/></Button>}
      <Button type="submit" size="sm" className="ml-auto rounded-full min-h-10" disabled={!verified||sending||recording||micStarting||(!text.trim()&&!draft)}><Send className="size-4 mr-1"/>Enviar</Button>
     </div>
    </form>
