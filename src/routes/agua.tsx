@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Notice, PageHeader, Panel } from "@/components/voltara/ui";
 import { download, waterHistoryCsv } from "@/lib/voltara/export";
-import { currentMonthKey, money, monthLong, num, uid } from "@/lib/voltara/format";
+import { currentMonthKey, money, monthLong, num } from "@/lib/voltara/format";
 import { setVoltara, useVoltara } from "@/lib/voltara/store";
 import type { WaterBill } from "@/lib/voltara/types";
 
@@ -59,7 +59,7 @@ function WaterPage() {
       setError("Informe um valor válido em reais, com até duas casas decimais."); return;
     }
     if (volume !== undefined && (!/^\d+(?:[,.]\d{1,3})?$/.test(m3.trim()) ||
-      !Number.isFinite(volume) || volume <= 0 || volume > 1_000_000)) {
+      !Number.isFinite(volume) || volume < 0.01 || volume > 1_000_000)) {
       setError("O consumo em m³ deve ser positivo ou ficar em branco."); return;
     }
     const cleanNote = note.trim();
@@ -71,7 +71,7 @@ function WaterPage() {
       setError("Esse mês já está cadastrado. Use Editar no histórico para alterá-lo."); return;
     }
     const bill: WaterBill = {
-      id: editingId ?? uid(),
+      id: editingId ?? "water-" + month,
       month,
       value: amount,
       ...(volume === undefined ? {} : { m3: volume }),
