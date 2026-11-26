@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Notice, PageHeader, Panel } from "@/components/voltara/ui";
 import { billError, calibrate } from "@/lib/voltara/calc";
 import { download, historyCsv } from "@/lib/voltara/export";
-import { currentMonthKey, kwh, money, monthLong, pct, uid } from "@/lib/voltara/format";
+import { currentMonthKey, kwh, money, monthLong, pct } from "@/lib/voltara/format";
 import { setVoltara, useVoltara } from "@/lib/voltara/store";
 
 export const Route = createFileRoute("/contas")({
@@ -34,12 +34,12 @@ function Contas() {
     const amount = Number(value.replace(",", "."));
     const hasKwh = consumption.trim() !== "";
     const usedKwh = hasKwh ? Number(consumption.replace(",", ".")) : undefined;
-    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || !Number.isFinite(amount) || amount <= 0) {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || !/^\d+(?:[,.]\d{1,2})?$/.test(value.trim()) || !Number.isFinite(amount) || amount < 0.01 || amount > 1_000_000) {
       setError("Informe um mês válido e um valor de fatura maior que zero.");
       setFeedback("");
       return;
     }
-    if (hasKwh && (usedKwh === undefined || !Number.isFinite(usedKwh) || usedKwh <= 0)) {
+    if (hasKwh && (usedKwh === undefined || !Number.isFinite(usedKwh) || usedKwh < 0.01 || usedKwh > 1_000_000)) {
       setError("O consumo deve ser positivo ou ficar em branco.");
       setFeedback("");
       return;
@@ -48,7 +48,7 @@ function Contas() {
     setVoltara((previous) => {
       const existing = previous.bills.find((b) => b.month === month);
       const bill = {
-        id: existing?.id ?? uid(),
+        id: existing?.id ?? "bill-" + month,
         month,
         value: amount,
         ...(usedKwh === undefined ? {} : { kwh: usedKwh }),
@@ -113,12 +113,12 @@ function Contas() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="bill-value">Valor da conta (R$)</Label>
-              <Input id="bill-value" type="number" min="0.01" step="0.01" required value={value}
+              <Input id="bill-value" type="number" min="0.01" max="1000000" step="0.01" required value={value}
                 placeholder="Ex.: 220" onChange={(e) => setValue(e.target.value)} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="bill-kwh">Consumo (kWh), opcional</Label>
-              <Input id="bill-kwh" type="number" min="0.01" step="0.01" value={consumption}
+              <Input id="bill-kwh" type="number" min="0.01" max="1000000" step="0.01" value={consumption}
                 placeholder="Ex.: 162" onChange={(e) => setConsumption(e.target.value)} />
             </div>
             {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
