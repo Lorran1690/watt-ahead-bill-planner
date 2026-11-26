@@ -4,7 +4,7 @@
  * respostas do Supabase, tokens de sessão ou dados de usuário.
  * Versão do cache alterada a cada revisão para evitar recursos antigos.
  */
-const CACHE_NAME = "voltara-static-v1";
+const CACHE_NAME = "voltara-static-v2";
 const OFFLINE_URL = "/offline.html";
 const PRE_CACHE = [
   "/offline.html",
@@ -63,4 +63,22 @@ self.addEventListener("fetch", (event) => {
       })
     )
   );
+});
+
+// Push contains no message content. Only open the app's own conversation route.
+self.addEventListener("push",event=>{
+ let data;try{data=event.data?.json()}catch{return;}
+ if(data?.type!=="voltara-connect")return;
+ event.waitUntil(self.registration.showNotification("Voltara Connect",{body:"Você recebeu uma nova mensagem privada.",tag:"voltara-connect",icon:"/voltara-icon-192.png",data:{type:"voltara-connect"}}));
+});
+self.addEventListener("notificationclick",event=>{
+ if(event.notification.data?.type!=="voltara-connect")return;
+ event.notification.close();
+ event.waitUntil((async()=>{
+ const url=new URL("/connect",self.location.origin).href;
+ const clients=await self.clients.matchAll({type:"window",includeUncontrolled:true});
+ const existing=clients.find(c=>c.url===url);
+ if(existing){await existing.focus();return;}
+ await self.clients.openWindow(url);
+ })());
 });
