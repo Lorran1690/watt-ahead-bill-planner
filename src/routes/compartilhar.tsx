@@ -12,6 +12,7 @@ import {
 } from "@/lib/voltara/cloud-sync";
 import { Notice, PageHeader, Panel } from "@/components/voltara/ui";
 import { FamilyMembers } from "@/components/voltara/FamilyMembers";
+import { PasswordAccount } from "@/components/voltara/PasswordAccount";
 import { PUBLIC_APP_ORIGIN, PUBLIC_SHARING_URL } from "@/lib/voltara/public-url";
 import { buildHouseholdInviteLink, clearPendingHouseholdInvite, getPendingHouseholdInvite, readHouseholdInviteHash, rememberHouseholdInvite } from "@/lib/voltara/invite-link";
 
@@ -202,6 +203,7 @@ function SharePage() {
         </Notice>
       )}
 
+      {cloudConfigured && !checking && <PasswordAccount email={myEmail} disabled={isPreview}/>}
       {!cloudConfigured ? (
         <Panel title="Ativação pendente">
           <div className="flex items-start gap-3">
