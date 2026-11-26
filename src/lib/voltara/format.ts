@@ -10,4 +10,4 @@ const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julh
 export const monthLong = (k: MonthKey) => { const { y, m } = fromKey(k); return `${MESES[m]} de ${y}`; };
 export const monthShort = (k: MonthKey) => { const { y, m } = fromKey(k); return `${MESES[m]!.slice(0, 3)}/${String(y).slice(2)}`; };
 export const currentMonthKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-export const uid = () => Math.random().toString(36).slice(2, 10);
+export const uid = () => globalThis.crypto.randomUUID();
