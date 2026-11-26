@@ -7,6 +7,7 @@ on:
       - 'docs/VOLTARA_CONNECT*'
       - 'scripts/connect-security*'
       - 'scripts/connect-push-security*'
+      - 'scripts/connect-push-outbox*'
       - 'supabase/functions/voltara-connect-push/**'
       - '.github/workflows/connect-security.yml'
   workflow_dispatch:
@@ -44,3 +45,6 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f scripts/connect-security-test.sql
           psql -v ON_ERROR_STOP=1 -f docs/VOLTARA_CONNECT_PUSH_STAGED.sql
           psql -v ON_ERROR_STOP=1 -f scripts/connect-push-security-test.sql
+          psql -v ON_ERROR_STOP=1 -f docs/VOLTARA_CONNECT_UNREAD_STAGED.sql
+          psql -v ON_ERROR_STOP=1 -f docs/VOLTARA_CONNECT_PUSH_OUTBOX_STAGED.sql
+          psql -v ON_ERROR_STOP=1 -f scripts/connect-push-outbox-test.sql
