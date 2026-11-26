@@ -3,7 +3,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getCloudClient } from "./cloud-client";
 import { PUBLIC_APP_ORIGIN, PUBLIC_SHARING_URL } from "./public-url";
 import { parseVoltaraConfirmationLink } from "./auth-link";
-import { diffSharedRecords, fromSharedRecords, toSharedRecords, overlayRecordChanges, recordId, type RecordChange, type SharedRecord } from "./cloud-records";
+import { diffSharedRecords, fromSharedRecords, toSharedRecords, overlayRecordChanges, type RecordChange, type SharedRecord } from "./cloud-records";
 import { journalKey, mergeJournal, readJournal, saveJournal } from "./sync-journal";
 import { defaultState } from "./defaults";
 import { getVoltaraSnapshot, setVoltara, subscribeVoltara } from "./store";
@@ -210,6 +210,9 @@ async function flushJournal() {
   writing = true;
   try {
     const client = assertBrowser();
+    const membership = await findMyHousehold();
+    if (generation !== connectionGeneration) return;
+    if (membership?.id !== id) throw new Error("Vínculo da casa indisponível.");
     while (journal.length && generation === connectionGeneration) {
       const change = journal[0]!;
       if (change.operation === "delete") {
@@ -279,7 +282,7 @@ function clearActive() {
  * Idempotente: evita canais duplicados quando a sessão é aberta em duas telas simultaneamente.
  */
 export function startHouseholdSync(householdId: string): Promise<void> {
-  if (activeId === householdId && status.phase !== "error") return Promise.resolve();
+  if (activeId === householdId) return retryHouseholdSync();
   if (startingHousehold === householdId && startPromise) return startPromise;
 
   const connect = async () => {
