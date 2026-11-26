@@ -76,11 +76,13 @@ create table public.voltara_chat_typing (
 alter table public.voltara_chat_typing enable row level security;
 revoke all on public.voltara_chat_typing from public,anon,authenticated;
 grant select on public.voltara_chat_typing to authenticated;
-grant insert(household_id,user_id,peer_id),update(user_id) on public.voltara_chat_typing to authenticated;
+grant insert(household_id,user_id,peer_id),update(household_id,user_id,peer_id) on public.voltara_chat_typing to authenticated;
 create policy voltara_chat_typing_read on public.voltara_chat_typing for select to authenticated using(voltara_chat_private.pair_allowed(household_id,user_id,peer_id));
 create policy voltara_chat_typing_insert on public.voltara_chat_typing for insert to authenticated with check(user_id=auth.uid() and voltara_chat_private.pair_allowed(household_id,user_id,peer_id));
 create policy voltara_chat_typing_update on public.voltara_chat_typing for update to authenticated using(user_id=auth.uid() and voltara_chat_private.pair_allowed(household_id,user_id,peer_id)) with check(user_id=auth.uid() and voltara_chat_private.pair_allowed(household_id,user_id,peer_id));
-create function voltara_chat_private.typing_clock() returns trigger language plpgsql set search_path='' as $$ begin new.touched_at=now(); return new; end; $$;
+create function voltara_chat_private.typing_clock() returns trigger language plpgsql set search_path='' as $$ begin
+ if tg_op='UPDATE' and (old.household_id,old.user_id,old.peer_id) is distinct from (new.household_id,new.user_id,new.peer_id) then raise exception 'Chave de presença imutável' using errcode='42501'; end if;
+ new.touched_at=now(); return new; end; $$;
 revoke all on function voltara_chat_private.typing_clock() from public,anon,authenticated;
 create trigger voltara_chat_typing_clock before insert or update on public.voltara_chat_typing for each row execute function voltara_chat_private.typing_clock();
 
