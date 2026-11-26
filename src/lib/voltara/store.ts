@@ -6,7 +6,10 @@ import type { VoltaraState } from "./types";
 const SERVER = defaultState();
 let state: VoltaraState | null = null;
 const listeners = new Set<() => void>();
-const kv = (): KV | null => (typeof window === "undefined" ? null : window.localStorage);
+const kv = (): KV | null => {
+  try { return typeof window === "undefined" ? null : window.localStorage; }
+  catch { return null; }
+};
 
 function get(): VoltaraState {
   if (!state) state = loadState(kv());
