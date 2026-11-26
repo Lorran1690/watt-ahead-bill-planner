@@ -98,7 +98,7 @@ function Conversation({pair}:{pair:Pair}){
  const mediaRecorder=useRef<MediaRecorder|null>(null),stream=useRef<MediaStream|null>(null),stopTimer=useRef<number|undefined>(undefined),discard=useRef(false);
  const fileInput=useRef<HTMLInputElement>(null),cameraInput=useRef<HTMLInputElement>(null);
  const seen=useRef(new Set<string>());
- const decoded=useRef<{key:CryptoKey|null;messages:Map<string,{ciphertext:string;result:Promise<ChatPayload|null>}>}>({key:null,messages:new Map()});
+ const decoded=useRef<{key:CryptoKey|null;messages:Map<string,{binding:string;result:Promise<ChatPayload|null>}>}>({key:null,messages:new Map()});
  const scope=pairScope(pair.house,pair.me,pair.peer);
  const peer=presence.members.find(m=>!m.is_self);
  const peerStatus=!presence.error&&peer?presenceLabel(peer):"unknown";
@@ -185,8 +185,9 @@ function Conversation({pair}:{pair:Pair}){
   for(const id of cache.keys())if(!ids.has(id))cache.delete(id);
   void Promise.all(timeline.map(async row=>{
    let entry=cache.get(row.id);
-   if(!entry||entry.ciphertext!==row.ciphertext){
-    entry={ciphertext:row.ciphertext,result:openMessage(key,row).catch(()=>null)};
+   const binding=JSON.stringify([row.household_id,row.sender_id,row.recipient_id,row.id,row.has_media,row.ciphertext]);
+   if(!entry||entry.binding!==binding){
+    entry={binding,result:openMessage(key,row).catch(()=>null)};
     cache.set(row.id,entry);
    }
    return {row,payload:await entry.result};
@@ -218,7 +219,7 @@ function Conversation({pair}:{pair:Pair}){
    if(!alive.current||!unlocked.current||generation!==lockEpoch.current)return;
    forceBottom.current=true;followBottom.current=true;
    setOutbox(old=>mergeTimeline(old,[{...item.envelope,created_at:new Date(item.queuedAt).toISOString()}]));
-   setText("");setDraft(null);setReply(undefined);composerRef.current?.focus({preventScroll:true});void flush();
+   setText(current=>current===text?"":current);setDraft(current=>current===draft?null:current);setReply(current=>current===reply?undefined:current);composerRef.current?.focus({preventScroll:true});void flush();
   }catch(e){report(e);}finally{if(alive.current)setSending(false);}
  }
  async function choosePhoto(file?:File){
