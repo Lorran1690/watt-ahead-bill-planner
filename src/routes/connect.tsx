@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState,type FormEvent} from "react";
+import {useEffect,useMemo,useRef,useState,type FormEvent} from "react";
 import {createFileRoute,Link} from "@tanstack/react-router";
 import {Camera,Mic,LockKeyhole,MessageCircle,Send,Star,Pin,Paperclip} from "lucide-react";
 import {Button} from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {ReceiptScanner} from "@/components/voltara/ReceiptScanner";
 import {loadPair,listMessages,listReceipts,markRead,typing,peerTyping,queueMessage,flushMessages,readMedia,compressPhoto,type Pair} from "@/lib/voltara/connect-api";
 import {newPairSecret,pairScope,unlockPair,openMessage,type ChatPayload,type Envelope} from "@/lib/voltara/connect-crypto";
 import {queued} from "@/lib/voltara/connect-queue";
+import {isPairMessage,mergeTimeline,timelineWithQueue} from "@/lib/voltara/connect-timeline";
 import {pushConfigured,subscribeConnectPush,unsubscribeConnectPush} from "@/lib/voltara/connect-push";
 
 export const Route=createFileRoute("/connect")({head:()=>({meta:[{title:"Voltara Connect"}]}),component:ConnectPage});
@@ -73,7 +74,12 @@ function Conversation({pair}:{pair:Pair}){
  const [draft,setDraft]=useState<DraftMedia|null>(null);
  const [reply,setReply]=useState<string|undefined>();
  const [error,setError]=useState("");
- const [pending,setPending]=useState(0);
+ const [outbox,setOutbox]=useState<Envelope[]>([]);
+ const timeline=useMemo(()=>timelineWithQueue(rows,outbox),[rows,outbox]);
+ const pendingIds=useMemo(()=>{const confirmed=new Set(rows.map(r=>r.id));return new Set(outbox.filter(r=>!confirmed.has(r.id)).map(r=>r.id));},[rows,outbox]);
+ const pending=pendingIds.size;
+ const scrollRef=useRef<HTMLDivElement>(null),composerRef=useRef<HTMLTextAreaElement>(null),followBottom=useRef(true),forceBottom=useRef(false);
+ const lockEpoch=useRef(0),flushAgain=useRef(false);
  const [connected,setConnected]=useState(false);
  const [sending,setSending]=useState(false);
  const [typingAllowed,setTypingAllowed]=useState(false);
@@ -120,39 +126,46 @@ function Conversation({pair}:{pair:Pair}){
   }catch(e){report(e);}
  }
  function lock(){
-  unlocked.current=false;micEpoch.current++;setMicStarting(false);setVerified(false);stopRecording(true);setKey(null);setRows([]);setViews([]);setSecret("");setFingerprint("");setText("");setDraft(null);setScanFile(null);setReply(undefined);setFilter("");setSelectedExpense("");setRecording(false);setRead(new Set());seen.current.clear();known.current=null;
+  unlocked.current=false;lockEpoch.current++;micEpoch.current++;setOutbox([]);setMicStarting(false);setVerified(false);stopRecording(true);setKey(null);setRows([]);setViews([]);setSecret("");setFingerprint("");setText("");setDraft(null);setScanFile(null);setReply(undefined);setFilter("");setSelectedExpense("");setRecording(false);setRead(new Set());seen.current.clear();known.current=null;
  }
  async function refresh(){
-  if(!alive.current||refreshBusy.current)return;
+  if(!alive.current||!unlocked.current||refreshBusy.current)return;
+  const generation=lockEpoch.current;
   refreshBusy.current=true;
   try{
    const latest=await listMessages(pair);
-   if(!alive.current)return;
-   setRows(old=>[...new Map([...old,...latest].map(e=>[e.id,e])).values()].sort((a,b)=>(a.created_at??"").localeCompare(b.created_at??"")||a.id.localeCompare(b.id)));
+   if(!alive.current||!unlocked.current||generation!==lockEpoch.current)return;
+   setRows(old=>mergeTimeline(old,latest));
    setConnected(true);
    if(known.current&&notificationRef.current&&latest.some(e=>e.sender_id===pair.peer&&!known.current!.has(e.id))&&document.hidden){
     void navigator.serviceWorker?.ready.then(reg=>reg.showNotification("Voltara Connect",{body:"Você recebeu uma nova mensagem privada.",tag:"voltara-connect",data:{type:"voltara-connect"}})).catch(()=>{});
    }
    known.current=new Set(latest.map(e=>e.id));
-   setPending((await queued(pair.scope)).length);
+
   }catch{if(alive.current)setConnected(false);}
   finally{refreshBusy.current=false;}
  }
  async function flush(){
-  if(!alive.current||!unlocked.current||busy.current||!navigator.onLine)return;
-  busy.current=true;
-  try{await flushMessages(pair,()=>alive.current&&unlocked.current);if(alive.current){setPending((await queued(pair.scope)).length);await refresh();}}
-  catch{if(alive.current)setConnected(false);}
-  finally{busy.current=false;}
+  if(!alive.current||!unlocked.current||!navigator.onLine)return;
+  if(busy.current){flushAgain.current=true;return;}
+  const generation=lockEpoch.current;
+  const active=()=>alive.current&&unlocked.current&&generation===lockEpoch.current;
+  busy.current=true;flushAgain.current=false;
+  try{await flushMessages(pair,active,row=>{if(!active())return;setRows(old=>mergeTimeline(old,[row]));setOutbox(old=>old.filter(item=>item.id!==row.id));setConnected(true);});}
+  catch{if(active())setConnected(false);}
+  finally{busy.current=false;if(flushAgain.current&&alive.current&&unlocked.current){flushAgain.current=false;void flush();}}
  }
  useEffect(()=>{
   if(!key)return;let active=true;
   const c=getCloudClient();if(!c)return;
   const onUpdate=()=>{if(active)void refresh();};
+  const onMessage=(event:{new:unknown})=>{if(!active||!unlocked.current)return;if(!isPairMessage(event.new,pair)){onUpdate();return;}const row=event.new;setRows(old=>mergeTimeline(old,[row]));setConnected(true);};
+  const generation=lockEpoch.current;
+  void queued(pair.scope).then(items=>{if(active&&unlocked.current&&generation===lockEpoch.current)setOutbox(old=>mergeTimeline(old,items.map(q=>({...q.envelope,created_at:new Date(q.queuedAt).toISOString()}))));}).catch(()=>{});
   const onReceipt=()=>{if(active)void listReceipts(pair,rowsRef.current.map(r=>r.id)).then(r=>{if(active)setRead(r)}).catch(()=>{});};
   const onTyping=()=>{if(active)void peerTyping(pair).then(v=>{if(active)setIsTyping(v)}).catch(()=>{});};
   const channel=c.channel("connect:"+pair.scope+":"+crypto.randomUUID())
-   .on("postgres_changes",{event:"INSERT",schema:"public",table:"voltara_chat_messages",filter:"household_id=eq."+pair.house},onUpdate)
+   .on("postgres_changes",{event:"INSERT",schema:"public",table:"voltara_chat_messages",filter:"household_id=eq."+pair.house},onMessage)
    .on("postgres_changes",{event:"INSERT",schema:"public",table:"voltara_chat_receipts",filter:"household_id=eq."+pair.house},onReceipt)
    .on("postgres_changes",{event:"*",schema:"public",table:"voltara_chat_typing",filter:"household_id=eq."+pair.house},onTyping)
    .subscribe(s=>{if(active&&s==="SUBSCRIBED"){onUpdate();onReceipt();onTyping();}});
@@ -165,10 +178,10 @@ function Conversation({pair}:{pair:Pair}){
  useEffect(()=>{
   let active=true;
   if(!key){setViews([]);return;}
-  void Promise.all(rows.map(async row=>({row,payload:await openMessage(key,row).catch(()=>null)}))).then(v=>{if(active)setViews(v);});
+  void Promise.all(timeline.map(async row=>({row,payload:await openMessage(key,row).catch(()=>null)}))).then(v=>{if(active)setViews(v);});
   void listReceipts(pair,rows.map(r=>r.id)).then(r=>{if(active)setRead(r)}).catch(()=>{});
   return()=>{active=false};
- },[key,rows,pair.scope]);
+ },[key,timeline,rows,pair.scope]);
  async function loadOlder(){
   try{
    const first=rows[0];if(!first?.created_at)return;
@@ -183,9 +196,12 @@ function Conversation({pair}:{pair:Pair}){
   setSending(true);setError("");
   try{
    const payload:ChatPayload={text:text.trim(),...(reply?{reply}:{}),...(draft?{media:{kind:draft.kind,mime:draft.mime,size:draft.blob.size}}:{}),...(financial?{financial}:{})};
-   await queueMessage(pair,key,payload,draft?.blob);
-   if(!alive.current)return;
-   setText("");setDraft(null);setReply(undefined);setPending((await queued(pair.scope)).length);void flush();
+   const generation=lockEpoch.current;
+   const item=await queueMessage(pair,key,payload,draft?.blob);
+   if(!alive.current||!unlocked.current||generation!==lockEpoch.current)return;
+   forceBottom.current=true;followBottom.current=true;
+   setOutbox(old=>mergeTimeline(old,[{...item.envelope,created_at:new Date(item.queuedAt).toISOString()}]));
+   setText("");setDraft(null);setReply(undefined);composerRef.current?.focus({preventScroll:true});void flush();
   }catch(e){report(e);}finally{if(alive.current)setSending(false);}
  }
  async function choosePhoto(file?:File){
@@ -264,6 +280,7 @@ function Conversation({pair}:{pair:Pair}){
   document.addEventListener("visibilitychange",onVisible);
   return()=>{observer.disconnect();document.removeEventListener("visibilitychange",onVisible)};
  },[key,views,filter,mode,read,pair.scope]);
+ useEffect(()=>{const el=scrollRef.current;if(el&&(forceBottom.current||followBottom.current)){el.scrollTop=el.scrollHeight;forceBottom.current=false;}},[views,mode,filter]);
  if(!key)return <Panel title="Parear a conversa" hint="Chave compartilhada apenas pelos dois dispositivos.">
   <Notice tone="warn">Crie uma chave uma única vez e compartilhe-a diretamente, de preferência pessoalmente. Nos outros aparelhos, use exatamente a mesma chave. O Voltara não a envia ao servidor, não a guarda após fechar a conversa e não consegue recuperá-la. Não envie a chave por e-mail ou pelo chat.</Notice>
   <form onSubmit={unlock} className="mt-4 space-y-3">
@@ -278,7 +295,7 @@ function Conversation({pair}:{pair:Pair}){
    <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={verified} onChange={e=>setVerified(e.target.checked)}/>Confirmei que o código de verificação coincide nos dois aparelhos.</label>
    <div className="flex flex-wrap gap-2 items-center"><Input aria-label="Pesquisar mensagens carregadas" value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Pesquisar mensagens..." className="flex-1 min-w-32"/>{(["all","media","favorites"] as const).map(m=><Button key={m} size="sm" variant={mode===m?"default":"outline"} onClick={()=>setMode(m)}>{m==="all"?"Conversa":m==="media"?"Galeria":"Favoritas"}</Button>)}</div>
    {pinned.length>0&&<div className="rounded-xl bg-primary/10 p-2 text-xs"><strong>Fixadas neste aparelho</strong>{views.filter(v=>pinned.includes(v.row.id)).map(v=><p key={v.row.id} className="break-words">{v.payload?.text||"Anexo / mensagem"}</p>)}</div>}
-   <div className="max-h-[58dvh] min-h-[240px] overflow-y-auto rounded-xl bg-background/50 p-3 space-y-3" aria-label="Mensagens">
+   <div ref={scrollRef} onScroll={e=>{const el=e.currentTarget;followBottom.current=el.scrollHeight-el.clientHeight-el.scrollTop<120;}} className="max-h-[58dvh] min-h-[240px] overflow-y-auto overscroll-contain rounded-xl bg-background/50 p-3 space-y-3" aria-label="Mensagens">
     {rows.length>=50&&olderAvailable&&<Button size="sm" variant="ghost" onClick={()=>void loadOlder()}>Carregar anteriores</Button>}
     {!visible.length&&<p className="text-center text-sm text-muted-foreground py-12">Nenhuma mensagem neste filtro.</p>}
     {visible.map(v=><div key={v.row.id} data-chat-id={v.row.id} className={"flex "+(v.row.sender_id===pair.me?"justify-end":"justify-start")}>
@@ -288,30 +305,30 @@ function Conversation({pair}:{pair:Pair}){
        {v.payload.text&&<p className="whitespace-pre-wrap break-words text-sm">{v.payload.text}</p>}
        {v.payload.financial&&<div className="mt-2 rounded-lg border bg-background/50 p-2"><p className="text-xs">Resumo compartilhado</p><strong className="break-words">{v.payload.financial.label}</strong><p>{money(v.payload.financial.amount)}</p></div>}
        {v.payload.media&&<Media key={v.row.id} row={v.row} payload={v.payload} cryptoKey={key} onScan={f=>setScanFile(f)}/>}
-       <div className="flex flex-wrap gap-1 mt-2">
+       <details className="mt-1"><summary className="cursor-pointer select-none text-xs text-muted-foreground">Opções</summary><div className="flex flex-wrap gap-1 mt-1">
         <Button size="sm" variant="ghost" onClick={()=>setReply(v.row.id)}>Responder</Button>
         <Button size="sm" variant="ghost" aria-label="Favoritar" onClick={()=>togglePref(v.row.id,"favorite")}><Star className={"size-4 "+(favorite.includes(v.row.id)?"fill-primary text-primary":"")}/></Button>
         <Button size="sm" variant="ghost" aria-label="Fixar" onClick={()=>togglePref(v.row.id,"pinned")}><Pin className={"size-4 "+(pinned.includes(v.row.id)?"fill-primary text-primary":"")}/></Button>
         {v.payload.text&&<Button size="sm" variant="ghost" onClick={()=>addShopping(v)}>Lista de compras</Button>}
-       </div>
+       </div></details>
       </>}
-      <p className="mt-1 text-right text-[10px] text-muted-foreground">{time(v.row.created_at)} {v.row.sender_id===pair.me?(read.has(v.row.id)?"· Lida":"· Enviada"):""}</p>
+      <p className="mt-1 text-right text-[10px] text-muted-foreground">{time(v.row.created_at)} {v.row.sender_id===pair.me?(pendingIds.has(v.row.id)?"· Na fila":read.has(v.row.id)?"· ✓✓ Lida":"· ✓ Enviada"):""}</p>
      </div>
     </div>)}
    </div>
-   {pending>0&&<Notice>{pending} mensagem(ns) cifrada(s) na fila deste aparelho. O envio é retomado quando a conversa está aberta e conectada.</Notice>}
+   {pending>0&&<div role="status" className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span>{pending} mensagem(ns) na fila criptografada.</span><Button size="sm" variant="ghost" onClick={()=>void flush()}>Tentar enviar</Button></div>}
    {error&&<p role="alert" className="text-sm text-destructive">{error}</p>}
    {reply&&<div className="text-xs flex items-center gap-2">Respondendo: <span className="truncate">{views.find(v=>v.row.id===reply)?.payload?.text||"Mensagem"}</span><Button size="sm" variant="ghost" onClick={()=>setReply(undefined)}>Cancelar</Button></div>}
    {draft&&<div className="rounded-lg border p-2 space-y-2">{draft.kind==="image"?<img src={preview} alt="Prévia da foto" className="max-h-40 rounded-lg"/>:<audio src={preview} controls className="w-full max-w-full"/>}<Button size="sm" variant="outline" onClick={()=>setDraft(null)}>Remover anexo</Button></div>}
-   <form className="space-y-2" onSubmit={e=>void send(e)}>
-    <textarea aria-label="Mensagem" rows={2} className="w-full resize-none rounded-xl border bg-background p-3 text-sm" placeholder="Digite sua mensagem..." maxLength={4000} value={text} onChange={e=>{setText(e.target.value);if(typingAllowed&&e.target.value.trim()&&Date.now()-lastTyping.current>3000){lastTyping.current=Date.now();void typing(pair).catch(()=>{});}}}/>
+   <form className="sticky bottom-0 z-10 space-y-2 rounded-xl border bg-card p-2 shadow-lg" onSubmit={e=>void send(e)}>
+    <textarea ref={composerRef} aria-label="Mensagem" rows={1} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.nativeEvent.isComposing&&window.matchMedia("(pointer:fine)").matches){e.preventDefault();void send();}}} className="w-full resize-none rounded-xl border bg-background p-3 text-sm" placeholder="Digite sua mensagem..." maxLength={4000} value={text} onChange={e=>{setText(e.target.value);if(typingAllowed&&e.target.value.trim()&&Date.now()-lastTyping.current>3000){lastTyping.current=Date.now();void typing(pair).catch(()=>{});}}}/>
     <div className="flex flex-wrap gap-2">
      <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e=>{void choosePhoto(e.target.files?.[0]);e.target.value="";}}/>
      <input ref={cameraInput} type="file" accept="image/*" capture="environment" hidden onChange={e=>{void choosePhoto(e.target.files?.[0]);e.target.value="";}}/>
-     <Button type="button" size="sm" variant="outline" disabled={recording||micStarting||!verified} onClick={()=>fileInput.current?.click()}><Paperclip className="size-4 mr-1"/>Foto</Button>
-     <Button type="button" size="sm" variant="outline" disabled={recording||micStarting||!verified} onClick={()=>cameraInput.current?.click()}><Camera className="size-4 mr-1"/>Câmera</Button>
-     {recording?<><Button type="button" size="sm" onClick={()=>stopRecording()}>Parar gravação</Button><Button type="button" size="sm" variant="ghost" onClick={()=>stopRecording(true)}>Cancelar áudio</Button></>:<Button type="button" size="sm" variant="outline" disabled={!!draft||micStarting||!verified} onClick={()=>void startRecording()}><Mic className="size-4 mr-1"/>Áudio</Button>}
-     <Button type="submit" size="sm" disabled={!verified||sending||recording||micStarting||(!text.trim()&&!draft)}><Send className="size-4 mr-1"/>Enviar</Button>
+     <Button type="button" size="icon" variant="ghost" aria-label="Anexar foto" title="Anexar foto" disabled={recording||micStarting||!verified} onClick={()=>fileInput.current?.click()}><Paperclip className="size-5"/></Button>
+     <Button type="button" size="icon" variant="ghost" aria-label="Câmera" title="Câmera" disabled={recording||micStarting||!verified} onClick={()=>cameraInput.current?.click()}><Camera className="size-5"/></Button>
+     {recording?<><Button type="button" size="sm" onClick={()=>stopRecording()}>Parar gravação</Button><Button type="button" size="sm" variant="ghost" onClick={()=>stopRecording(true)}>Cancelar áudio</Button></>:<Button type="button" size="icon" variant="ghost" aria-label="Gravar áudio" title="Gravar áudio" disabled={!!draft||micStarting||!verified} onClick={()=>void startRecording()}><Mic className="size-5"/></Button>}
+     <Button type="submit" size="sm" className="ml-auto rounded-full min-h-10" disabled={!verified||sending||recording||micStarting||(!text.trim()&&!draft)}><Send className="size-4 mr-1"/>Enviar</Button>
     </div>
    </form>
    <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={typingAllowed} onChange={e=>setTypingAllowed(e.target.checked)}/>Compartilhar indicador de digitação</label>
