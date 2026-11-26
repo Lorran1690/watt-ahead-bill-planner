@@ -30,6 +30,13 @@ Deno.serve(async req=>{
   const peer=await caller.rpc("voltara_chat_peer",{h:body.house});
   if(peer.error||!uuid(peer.data))return json(403,{error:"pair"});
   const admin=createClient(url,service,{auth:{persistSession:false,autoRefreshToken:false}});
+  if(body.action==="config")return json(200,{ok:true,publicKey:pub});
+  if(body.action==="status"){
+   if(!endpointAllowed(body.endpoint))return json(400,{error:"subscription"});
+   const result=await admin.from("voltara_chat_push_devices").select("endpoint").eq("endpoint",body.endpoint).eq("user_id",user.id).eq("household_id",body.house).eq("peer_id",peer.data).maybeSingle();
+   if(result.error)return json(500,{error:"storage"});
+   return json(200,{ok:true,registered:!!result.data});
+  }
   if(body.action==="register"){
    const sub=body.subscription;
    if(!endpointAllowed(sub?.endpoint)||!validKey(sub?.keys?.p256dh,80,100)||!validKey(sub?.keys?.auth,20,30))return json(400,{error:"subscription"});
@@ -61,7 +68,7 @@ Deno.serve(async req=>{
   // Content-free notification. No plaintext, sender name, URL, balance or attachment.
   for(const d of devices.data??[]){
    if(!endpointAllowed(d.endpoint))continue;
-   try{await webpush.sendNotification({endpoint:d.endpoint,keys:{p256dh:d.p256dh,auth:d.auth_secret}},JSON.stringify({type:"voltara-connect"}),{TTL:60,timeout:5000});}
+   try{await webpush.sendNotification({endpoint:d.endpoint,keys:{p256dh:d.p256dh,auth:d.auth_secret}},JSON.stringify({type:"voltara-connect"}),{TTL:86400,urgency:"high",timeout:5000});}
    catch(e){const code=(e as {statusCode?:number}).statusCode;if(code===404||code===410)await admin.from("voltara_chat_push_devices").delete().eq("endpoint",d.endpoint).eq("user_id",peer.data);}
   }
   return json(200,{ok:true});
