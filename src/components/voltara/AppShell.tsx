@@ -5,7 +5,7 @@ import { disconnectAfterAuthLoss, findMyHousehold, startHouseholdSync, getCloudS
 import { useHydrated } from "@tanstack/react-router";
 import { startVoltaraPwa } from "@/lib/voltara/pwa";
 import { startFamilyPresence } from "@/lib/voltara/presence";
-import { CalendarClock, Download, FlaskConical, Droplets, Gauge, House, Menu, Plug, Receipt, Settings, Users, Wallet, ChartPie } from "lucide-react";
+import { CalendarClock, Download, FlaskConical, Droplets, Gauge, House, Menu, Plug, Receipt, Settings, Users, Wallet, ChartPie, MessageCircle } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +22,7 @@ const NAV = [
   { to: "/configuracoes", label: "Ajustes", icon: Settings },
   { to: "/compartilhar", label: "Compartilhar", icon: Users },
   { to: "/instalar", label: "Instalar app", icon: Download },
+  { to: "/connect", label: "Connect", icon: MessageCircle },
 ] as const;
 
 /** Reconecta à casa em qualquer tela, inclusive ao abrir /gastos diretamente. */
@@ -95,7 +96,7 @@ export function AppShell() {
     return startFamilyPresence(sync.householdId);
   }, [hydrated, sync.householdId]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const MOBILE_NAV = [NAV[0], NAV[1], NAV[2]];
+  const MOBILE_NAV = [NAV[0], NAV[1], NAV[NAV.length - 1]!];
   useEffect(() => {
     if (hydrated) startVoltaraPwa();
   }, [hydrated]);
