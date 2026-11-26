@@ -24,21 +24,22 @@ function ConnectPage(){
  const [loading,setLoading]=useState(true);
  const [attempt,setAttempt]=useState(0);
  useEffect(()=>{
-  let active=true,busy=false;setPair(null);setError("");setLoading(true);
+  let active=true,busy=false;let confirmed:Pair|null=null;let epoch=0;setPair(null);setError("");setLoading(true);
   const c=getCloudClient();
   async function refresh(){
-   if(!active||busy)return;busy=true;
+   if(!active||busy||(!navigator.onLine&&confirmed))return;busy=true;const generation=epoch;
    try{
     if(!sync.householdId){if(active)setPair(null);return;}
     const p=await loadPair(sync.householdId);
-    if(active){setPair(old=>old?.scope===p?.scope?old:p);setError("");}
-   }catch{if(active){setPair(null);setError("Não foi possível confirmar o vínculo. Reconecte sua conta ou confira a instalação do chat.");}}
+    if(active&&generation===epoch){confirmed=p;setPair(old=>old?.scope===p?.scope?old:p);setError("");}
+   }catch{if(active&&generation===epoch){if(navigator.onLine||!confirmed){confirmed=null;setPair(null);}setError("Não foi possível confirmar o vínculo. Reconecte sua conta ou confira a instalação do chat.");}}
    finally{busy=false;if(active)setLoading(false);}
   }
   void refresh();
   const t=window.setInterval(()=>void refresh(),30000);
-  const sub=c?.auth.onAuthStateChange((event)=>{
-   if(event==="SIGNED_OUT"||event==="SIGNED_IN"){if(active){setPair(null);window.setTimeout(()=>void refresh(),0);}}
+  const sub=c?.auth.onAuthStateChange((event,session)=>{
+   if(event==="SIGNED_OUT"||(confirmed&&session?.user.id!==confirmed.me)){epoch++;confirmed=null;if(active)setPair(null);}
+   if(event==="SIGNED_IN"&&active)window.setTimeout(()=>void refresh(),0);
   }).data.subscription;
   return()=>{active=false;clearInterval(t);sub?.unsubscribe();};
  },[sync.householdId,attempt]);
@@ -59,6 +60,9 @@ function Conversation({pair}:{pair:Pair}){
  const [secret,setSecret]=useState("");
  const [fingerprint,setFingerprint]=useState("");
  const [reveal,setReveal]=useState(false);
+ const [verified,setVerified]=useState(false);
+ const [micStarting,setMicStarting]=useState(false);
+ const unlocked=useRef(false), micEpoch=useRef(0);
  const [rows,setRows]=useState<Envelope[]>([]);
  const [views,setViews]=useState<ViewMessage[]>([]);
  const [read,setRead]=useState<Set<string>>(new Set());
@@ -109,11 +113,11 @@ function Conversation({pair}:{pair:Pair}){
    const hash=new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode("voltara-fingerprint:"+scope+":"+normalized)));
    if(!alive.current)return;
    setFingerprint(Array.from(hash.slice(0,8),v=>v.toString(16).padStart(2,"0")).join("").match(/.{4}/g)!.join(" "));
-   setSecret("");setReveal(false);setKey(k);
+   setSecret("");setReveal(false);setVerified(false);unlocked.current=true;setKey(k);
   }catch(e){report(e);}
  }
  function lock(){
-  stopRecording(true);setKey(null);setRows([]);setViews([]);setSecret("");setFingerprint("");setText("");setDraft(null);setScanFile(null);setReply(undefined);setFilter("");setSelectedExpense("");setRecording(false);setRead(new Set());seen.current.clear();known.current=null;
+  unlocked.current=false;micEpoch.current++;setMicStarting(false);setVerified(false);stopRecording(true);setKey(null);setRows([]);setViews([]);setSecret("");setFingerprint("");setText("");setDraft(null);setScanFile(null);setReply(undefined);setFilter("");setSelectedExpense("");setRecording(false);setRead(new Set());seen.current.clear();known.current=null;
  }
  async function refresh(){
   if(!alive.current||refreshBusy.current)return;
@@ -132,9 +136,9 @@ function Conversation({pair}:{pair:Pair}){
   finally{refreshBusy.current=false;}
  }
  async function flush(){
-  if(!alive.current||busy.current||!navigator.onLine)return;
+  if(!alive.current||!unlocked.current||busy.current||!navigator.onLine)return;
   busy.current=true;
-  try{await flushMessages(pair,()=>alive.current);if(alive.current){setPending((await queued(pair.scope)).length);await refresh();}}
+  try{await flushMessages(pair,()=>alive.current&&unlocked.current);if(alive.current){setPending((await queued(pair.scope)).length);await refresh();}}
   catch{if(alive.current)setConnected(false);}
   finally{busy.current=false;}
  }
@@ -172,7 +176,7 @@ function Conversation({pair}:{pair:Pair}){
   }catch(e){report(e);}
  }
  async function send(e?:FormEvent,financial?:ChatPayload["financial"]){
-  e?.preventDefault();if(!key||sending||recording||(!text.trim()&&!draft&&!financial))return;
+  e?.preventDefault();if(!key||!verified||sending||recording||micStarting||(!text.trim()&&!draft&&!financial))return;
   setSending(true);setError("");
   try{
    const payload:ChatPayload={text:text.trim(),...(reply?{reply}:{}),...(draft?{media:{kind:draft.kind,mime:draft.mime,size:draft.blob.size}}:{}),...(financial?{financial}:{})};
@@ -182,24 +186,24 @@ function Conversation({pair}:{pair:Pair}){
   }catch(e){report(e);}finally{if(alive.current)setSending(false);}
  }
  async function choosePhoto(file?:File){
-  if(!file||!key)return;setError("");
-  try{const blob=await compressPhoto(file);if(alive.current)setDraft({blob,kind:"image",mime:"image/jpeg"});}catch(e){report(e);}
+  if(!file||!key||!verified)return;setError("");
+  try{const blob=await compressPhoto(file);if(alive.current&&unlocked.current)setDraft({blob,kind:"image",mime:"image/jpeg"});}catch(e){report(e);}
  }
  async function startRecording(){
-  if(recording||draft||!key)return;setError("");
+  if(recording||micStarting||draft||!key||!verified)return;setError("");setMicStarting(true);const generation=++micEpoch.current;
   try{
    if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==="undefined")throw Error("Gravação não disponível neste navegador.");
    const mime=["audio/webm;codecs=opus","audio/mp4","audio/ogg;codecs=opus"].find(t=>MediaRecorder.isTypeSupported(t));
    if(!mime)throw Error("Formato de voz incompatível.");
    const audio=await navigator.mediaDevices.getUserMedia({audio:true});
-   if(!alive.current){audio.getTracks().forEach(t=>t.stop());return;}
+   if(!alive.current||!unlocked.current||generation!==micEpoch.current){audio.getTracks().forEach(t=>t.stop());return;}
    stream.current=audio;discard.current=false;
    const chunks:Blob[]=[];const recorder=new MediaRecorder(audio,{mimeType:mime,audioBitsPerSecond:32000});mediaRecorder.current=recorder;
    recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
    recorder.onerror=()=>{report(Error("Falha ao gravar áudio."));stopRecording(true)};
    recorder.onstop=()=>{
     audio.getTracks().forEach(t=>t.stop());stream.current=null;
-    if(!alive.current)return;setRecording(false);
+    if(!alive.current||generation!==micEpoch.current)return;setRecording(false);
     if(discard.current)return;
     const format=mime.split(";")[0] as DraftMedia["mime"];
     const blob=new Blob(chunks,{type:format});
@@ -208,6 +212,7 @@ function Conversation({pair}:{pair:Pair}){
    };
    recorder.start(1000);setRecording(true);stopTimer.current=window.setTimeout(()=>stopRecording(),120000);
   }catch(e){stream.current?.getTracks().forEach(t=>t.stop());stream.current=null;report(e);}
+  finally{if(alive.current&&generation===micEpoch.current)setMicStarting(false);}
  }
  function togglePref(id:string,which:"favorite"|"pinned"){
   const current=which==="favorite"?favorite:pinned;
@@ -263,6 +268,7 @@ function Conversation({pair}:{pair:Pair}){
   <Panel className="space-y-3">
    <div className="flex flex-wrap items-center gap-3"><div className="rounded-full bg-primary/15 p-3"><MessageCircle className="size-6 text-primary"/></div><div className="min-w-0 flex-1"><h2 className="font-semibold">Conversa da casa</h2><p className="text-xs text-muted-foreground">{isTyping?"Digitando...":peerStatus==="online"?"Online no Voltara":peerStatus==="unstable"?"Sinal instável":peerStatus==="offline"?"Sem sinal recente":"Presença indisponível"} · {connected?"Conectado":"Sem conexão confirmada"}</p></div><Button size="sm" variant="outline" onClick={lock}>Bloquear</Button></div>
    <p className="text-xs break-words text-muted-foreground">Código de verificação: {fingerprint}. Compare pessoalmente nos dois aparelhos antes de conversar. Não compartilhe a chave.</p>
+   <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={verified} onChange={e=>setVerified(e.target.checked)}/>Confirmei que o código de verificação coincide nos dois aparelhos.</label>
    <div className="flex flex-wrap gap-2 items-center"><Input aria-label="Pesquisar mensagens carregadas" value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Pesquisar mensagens..." className="flex-1 min-w-32"/>{(["all","media","favorites"] as const).map(m=><Button key={m} size="sm" variant={mode===m?"default":"outline"} onClick={()=>setMode(m)}>{m==="all"?"Conversa":m==="media"?"Galeria":"Favoritas"}</Button>)}</div>
    {pinned.length>0&&<div className="rounded-xl bg-primary/10 p-2 text-xs"><strong>Fixadas neste aparelho</strong>{views.filter(v=>pinned.includes(v.row.id)).map(v=><p key={v.row.id} className="break-words">{v.payload?.text||"Anexo / mensagem"}</p>)}</div>}
    <div className="max-h-[58dvh] min-h-[240px] overflow-y-auto rounded-xl bg-background/50 p-3 space-y-3" aria-label="Mensagens">
@@ -295,10 +301,10 @@ function Conversation({pair}:{pair:Pair}){
     <div className="flex flex-wrap gap-2">
      <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e=>{void choosePhoto(e.target.files?.[0]);e.target.value="";}}/>
      <input ref={cameraInput} type="file" accept="image/*" capture="environment" hidden onChange={e=>{void choosePhoto(e.target.files?.[0]);e.target.value="";}}/>
-     <Button type="button" size="sm" variant="outline" disabled={recording} onClick={()=>fileInput.current?.click()}><Paperclip className="size-4 mr-1"/>Foto</Button>
-     <Button type="button" size="sm" variant="outline" disabled={recording} onClick={()=>cameraInput.current?.click()}><Camera className="size-4 mr-1"/>Câmera</Button>
-     {recording?<><Button type="button" size="sm" onClick={()=>stopRecording()}>Parar gravação</Button><Button type="button" size="sm" variant="ghost" onClick={()=>stopRecording(true)}>Cancelar áudio</Button></>:<Button type="button" size="sm" variant="outline" disabled={!!draft} onClick={()=>void startRecording()}><Mic className="size-4 mr-1"/>Áudio</Button>}
-     <Button type="submit" size="sm" disabled={sending||recording||(!text.trim()&&!draft)}><Send className="size-4 mr-1"/>Enviar</Button>
+     <Button type="button" size="sm" variant="outline" disabled={recording||micStarting||!verified} onClick={()=>fileInput.current?.click()}><Paperclip className="size-4 mr-1"/>Foto</Button>
+     <Button type="button" size="sm" variant="outline" disabled={recording||micStarting||!verified} onClick={()=>cameraInput.current?.click()}><Camera className="size-4 mr-1"/>Câmera</Button>
+     {recording?<><Button type="button" size="sm" onClick={()=>stopRecording()}>Parar gravação</Button><Button type="button" size="sm" variant="ghost" onClick={()=>stopRecording(true)}>Cancelar áudio</Button></>:<Button type="button" size="sm" variant="outline" disabled={!!draft||micStarting||!verified} onClick={()=>void startRecording()}><Mic className="size-4 mr-1"/>Áudio</Button>}
+     <Button type="submit" size="sm" disabled={!verified||sending||recording||micStarting||(!text.trim()&&!draft)}><Send className="size-4 mr-1"/>Enviar</Button>
     </div>
    </form>
    <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={typingAllowed} onChange={e=>setTypingAllowed(e.target.checked)}/>Compartilhar indicador de digitação</label>
@@ -307,7 +313,7 @@ function Conversation({pair}:{pair:Pair}){
   </Panel>
   <Panel title="Compartilhar gasto existente" hint="Envia somente o resumo escolhido, não cria um novo lançamento.">
    <select aria-label="Gasto para compartilhar" className="w-full rounded-lg border bg-background p-2 text-sm" value={selectedExpense} onChange={e=>setSelectedExpense(e.target.value)}><option value="">Selecione um gasto</option>{state.expenses.slice(-100).map(e=><option key={e.id} value={e.id}>{e.note||"Gasto"} · {money(e.amount)}</option>)}</select>
-   <Button className="mt-2" size="sm" disabled={!selectedExpense||sending||recording} onClick={()=>{const e=state.expenses.find(x=>x.id===selectedExpense);if(e&&window.confirm("Compartilhar o resumo deste gasto na conversa?"))void send(undefined,{label:(e.note||"Gasto").slice(0,120),amount:e.amount});}}>Enviar resumo</Button>
+   <Button className="mt-2" size="sm" disabled={!verified||!selectedExpense||sending||recording||micStarting} onClick={()=>{const e=state.expenses.find(x=>x.id===selectedExpense);if(e&&window.confirm("Compartilhar o resumo deste gasto na conversa?"))void send(undefined,{label:(e.note||"Gasto").slice(0,120),amount:e.amount});}}>Enviar resumo</Button>
   </Panel>
   {scanFile&&<div><Button variant="outline" onClick={()=>setScanFile(null)}>Fechar scanner</Button><ReceiptScanner key={scanFile.name} initialFile={scanFile}/></div>}
  </>;
