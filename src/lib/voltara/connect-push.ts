@@ -13,8 +13,10 @@ export async function subscribeConnectPush(pair:Pair){
  const normalized=publicKey.replace(/-/g,"+").replace(/_/g,"/");
  const key=Uint8Array.from(atob(normalized.padEnd(Math.ceil(normalized.length/4)*4,"=")),c=>c.charCodeAt(0));
  let sub=await registration.pushManager.getSubscription();
+ const created=!sub;
  if(!sub)sub=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
- await invoke({action:"register",house:pair.house,subscription:sub.toJSON()});
+ try{await invoke({action:"register",house:pair.house,subscription:sub.toJSON()});}
+ catch(error){if(created)await sub.unsubscribe().catch(()=>{});throw error;}
 }
 export async function unsubscribeConnectPush(pair:Pair){
  if(!("serviceWorker" in navigator))return;
