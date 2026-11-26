@@ -10,6 +10,7 @@ import {useFamilyPresence,presenceLabel} from "@/lib/voltara/presence";
 import {useVoltara,setVoltara} from "@/lib/voltara/store";
 import {parseCents,financeSchema} from "@/lib/voltara/finance";
 import {money} from "@/lib/voltara/format";
+import {connectAlertsEnabled,enableConnectAlerts,disableConnectAlerts} from "@/lib/voltara/connect-alerts";
 import {ConnectAudio} from "@/components/voltara/ConnectAudio";
 import {ReceiptScanner} from "@/components/voltara/ReceiptScanner";
 import {loadPair,listMessages,listReceipts,markRead,typing,peerTyping,queueMessage,flushMessages,readMedia,compressPhoto,type Pair} from "@/lib/voltara/connect-api";
@@ -90,6 +91,8 @@ function Conversation({pair}:{pair:Pair}){
  useEffect(()=>{if(!recording){setRecordSeconds(0);return;}const started=performance.now();const timer=window.setInterval(()=>setRecordSeconds(Math.min(120,Math.floor((performance.now()-started)/1000))),250);return()=>clearInterval(timer);},[recording]);
  const [olderAvailable,setOlderAvailable]=useState(true);
  const [notifications,setNotifications]=useState(false);
+ const [foregroundAlerts,setForegroundAlerts]=useState(false);
+ useEffect(()=>setForegroundAlerts(connectAlertsEnabled()),[]);
  const [pushActive,setPushActive]=useState(false);
  const [pushConfig,setPushConfig]=useState<{publicKey:string}|null>(null);
  const [pushStatus,setPushStatus]=useState("Verificando notificações...");
@@ -372,6 +375,7 @@ function Conversation({pair}:{pair:Pair}){
    </form>
    <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={typingAllowed} onChange={e=>setTypingAllowed(e.target.checked)}/>Compartilhar indicador de digitação</label>
    <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={pushActive} onClick={()=>void enableNotifications()}>{notifications?"Avisos locais autorizados":"Autorizar avisos locais"}</Button>{pushConfig&&<Button size="sm" variant="outline" disabled={pushBusy||pushActive} onClick={()=>void togglePush(true)}>{pushActive?"Notificações ativadas":"Ativar notificações push"}</Button>}{pushConfig&&<Button size="sm" variant="ghost" disabled={pushBusy||!pushActive} onClick={()=>void togglePush(false)}>Desativar push neste aparelho</Button>}</div>
+   <Button size="sm" variant="outline" onClick={()=>{if(foregroundAlerts){disableConnectAlerts();setForegroundAlerts(false);}else{void enableConnectAlerts().then(ok=>{setForegroundAlerts(ok);if(!ok)report(Error("Som e vibração indisponíveis neste aparelho."));});}}}>{foregroundAlerts?"Silenciar avisos no app":"Ativar som e vibração no app"}</Button>
    <p className="text-xs text-muted-foreground">Avisos locais enquanto a conversa estiver aberta. {pushStatus} Busca e galeria abrangem apenas mensagens carregadas. Favoritos e fixados são locais.</p>
   </Panel>
   <Panel title="Compartilhar gasto existente" hint="Envia somente o resumo escolhido, não cria um novo lançamento.">
