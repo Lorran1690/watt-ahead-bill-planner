@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cloudConfigured, getCloudClient } from "@/lib/voltara/cloud-client";
 import {
-  createHousehold, findMyHousehold, importLocalToHousehold,
+  createHousehold, discardPendingChanges, findMyHousehold, importLocalToHousehold,
   issueHouseholdInvite, joinHousehold, retryHouseholdSync, sendSignInEmail,
   signInWithCopiedEmailLink, signOutFamily, startHouseholdSync, useCloudStatus,
 } from "@/lib/voltara/cloud-sync";
@@ -380,6 +380,19 @@ function SharePage() {
         </>
       )}
 
+      {myEmail && household && status.pending > 0 && status.phase === "error" && (
+        <Panel title="Recuperar alterações pendentes">
+          <Notice tone="warn">Se o envio não concluir, exporte o backup JSON em Ajustes. A recuperação abaixo preserva uma cópia local e restaura os dados já sincronizados da casa. Ela descarta somente alterações pendentes neste aparelho.</Notice>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link to="/configuracoes" className="text-sm text-primary underline">Exportar backup antes</Link>
+            <Button variant="outline" disabled={loading} onClick={() => {
+              if (window.confirm("Restaurar os dados da nuvem e descartar as alterações pendentes deste aparelho? Exporte um backup antes.")) {
+                void run(discardPendingChanges);
+              }
+            }}>Recuperar histórico da nuvem</Button>
+          </div>
+        </Panel>
+      )}
       {myEmail && household && <FamilyMembers />}
       {message && <p role="status" className="text-sm text-success">{message}</p>}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
