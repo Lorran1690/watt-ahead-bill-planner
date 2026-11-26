@@ -98,6 +98,7 @@ function Conversation({pair}:{pair:Pair}){
  const mediaRecorder=useRef<MediaRecorder|null>(null),stream=useRef<MediaStream|null>(null),stopTimer=useRef<number|undefined>(undefined),discard=useRef(false);
  const fileInput=useRef<HTMLInputElement>(null),cameraInput=useRef<HTMLInputElement>(null);
  const seen=useRef(new Set<string>());
+ const decoded=useRef<{key:CryptoKey|null;messages:Map<string,{ciphertext:string;result:Promise<ChatPayload|null>}>}>({key:null,messages:new Map()});
  const scope=pairScope(pair.house,pair.me,pair.peer);
  const peer=presence.members.find(m=>!m.is_self);
  const peerStatus=!presence.error&&peer?presenceLabel(peer):"unknown";
@@ -126,7 +127,7 @@ function Conversation({pair}:{pair:Pair}){
   }catch(e){report(e);}
  }
  function lock(){
-  unlocked.current=false;lockEpoch.current++;micEpoch.current++;setOutbox([]);setMicStarting(false);setVerified(false);stopRecording(true);setKey(null);setRows([]);setViews([]);setSecret("");setFingerprint("");setText("");setDraft(null);setScanFile(null);setReply(undefined);setFilter("");setSelectedExpense("");setRecording(false);setRead(new Set());seen.current.clear();known.current=null;
+  unlocked.current=false;lockEpoch.current++;micEpoch.current++;setOutbox([]);setMicStarting(false);setVerified(false);stopRecording(true);setKey(null);setRows([]);setViews([]);setSecret("");setFingerprint("");setText("");setDraft(null);setScanFile(null);setReply(undefined);setFilter("");setSelectedExpense("");setRecording(false);setRead(new Set());seen.current.clear();known.current=null;decoded.current={key:null,messages:new Map()};
  }
  async function refresh(){
   if(!alive.current||!unlocked.current||refreshBusy.current)return;
@@ -162,7 +163,7 @@ function Conversation({pair}:{pair:Pair}){
   const onMessage=(event:{new:unknown})=>{if(!active||!unlocked.current)return;if(!isPairMessage(event.new,pair)){onUpdate();return;}const row=event.new;setRows(old=>mergeTimeline(old,[row]));setConnected(true);};
   const generation=lockEpoch.current;
   void queued(pair.scope).then(items=>{if(active&&unlocked.current&&generation===lockEpoch.current)setOutbox(old=>mergeTimeline(old,items.map(q=>({...q.envelope,created_at:new Date(q.queuedAt).toISOString()}))));}).catch(()=>{});
-  const onReceipt=()=>{if(active)void listReceipts(pair,rowsRef.current.map(r=>r.id)).then(r=>{if(active)setRead(r)}).catch(()=>{});};
+  const onReceipt=()=>{if(active)void listReceipts(pair,rowsRef.current.map(r=>r.id)).then(r=>{if(active)setRead(old=>new Set([...old,...r]))}).catch(()=>{});};
   const onTyping=()=>{if(active)void peerTyping(pair).then(v=>{if(active)setIsTyping(v)}).catch(()=>{});};
   const channel=c.channel("connect:"+pair.scope+":"+crypto.randomUUID())
    .on("postgres_changes",{event:"INSERT",schema:"public",table:"voltara_chat_messages",filter:"household_id=eq."+pair.house},onMessage)
@@ -178,10 +179,26 @@ function Conversation({pair}:{pair:Pair}){
  useEffect(()=>{
   let active=true;
   if(!key){setViews([]);return;}
-  void Promise.all(timeline.map(async row=>({row,payload:await openMessage(key,row).catch(()=>null)}))).then(v=>{if(active)setViews(v);});
-  void listReceipts(pair,rows.map(r=>r.id)).then(r=>{if(active)setRead(r)}).catch(()=>{});
+  if(decoded.current.key!==key)decoded.current={key,messages:new Map()};
+  const cache=decoded.current.messages;
+  const ids=new Set(timeline.map(row=>row.id));
+  for(const id of cache.keys())if(!ids.has(id))cache.delete(id);
+  void Promise.all(timeline.map(async row=>{
+   let entry=cache.get(row.id);
+   if(!entry||entry.ciphertext!==row.ciphertext){
+    entry={ciphertext:row.ciphertext,result:openMessage(key,row).catch(()=>null)};
+    cache.set(row.id,entry);
+   }
+   return {row,payload:await entry.result};
+  })).then(v=>{if(active&&unlocked.current)setViews(v);});
   return()=>{active=false};
- },[key,timeline,rows,pair.scope]);
+ },[key,timeline,pair.scope]);
+ useEffect(()=>{
+  if(!key)return;
+  let active=true;
+  void listReceipts(pair,rows.map(r=>r.id)).then(r=>{if(active)setRead(old=>new Set([...old,...r]));}).catch(()=>{});
+  return()=>{active=false};
+ },[key,rows,pair.scope]);
  async function loadOlder(){
   try{
    const first=rows[0];if(!first?.created_at)return;
@@ -291,8 +308,8 @@ function Conversation({pair}:{pair:Pair}){
  return <>
   <Panel className="space-y-3">
    <div className="flex flex-wrap items-center gap-3"><div className="rounded-full bg-primary/15 p-3"><MessageCircle className="size-6 text-primary"/></div><div className="min-w-0 flex-1"><h2 className="font-semibold">Conversa da casa</h2><p className="text-xs text-muted-foreground">{isTyping?"Digitando...":peerStatus==="online"?"Online no Voltara":peerStatus==="unstable"?"Sinal instável":peerStatus==="offline"?"Sem sinal recente":"Presença indisponível"} · {connected?"Conectado":"Sem conexão confirmada"}</p></div><Button size="sm" variant="outline" onClick={lock}>Bloquear</Button></div>
-   <p className="text-xs break-words text-muted-foreground">Código de verificação: {fingerprint}. Compare pessoalmente nos dois aparelhos antes de conversar. Não compartilhe a chave.</p>
-   <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={verified} onChange={e=>setVerified(e.target.checked)}/>Confirmei que o código de verificação coincide nos dois aparelhos.</label>
+   <details open={!verified} className="rounded-lg border p-2"><summary className="cursor-pointer text-xs text-muted-foreground">{verified?"Conversa verificada":"Verificar segurança da conversa"}</summary><p className="mt-2 text-xs break-words text-muted-foreground">Código de verificação: {fingerprint}. Compare pessoalmente nos dois aparelhos antes de conversar. Não compartilhe a chave.</p>
+   <label className="mt-2 flex items-center gap-2 text-xs"><input type="checkbox" checked={verified} onChange={e=>setVerified(e.target.checked)}/>Confirmei que o código de verificação coincide nos dois aparelhos.</label></details>
    <div className="flex flex-wrap gap-2 items-center"><Input aria-label="Pesquisar mensagens carregadas" value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Pesquisar mensagens..." className="flex-1 min-w-32"/>{(["all","media","favorites"] as const).map(m=><Button key={m} size="sm" variant={mode===m?"default":"outline"} onClick={()=>setMode(m)}>{m==="all"?"Conversa":m==="media"?"Galeria":"Favoritas"}</Button>)}</div>
    {pinned.length>0&&<div className="rounded-xl bg-primary/10 p-2 text-xs"><strong>Fixadas neste aparelho</strong>{views.filter(v=>pinned.includes(v.row.id)).map(v=><p key={v.row.id} className="break-words">{v.payload?.text||"Anexo / mensagem"}</p>)}</div>}
    <div ref={scrollRef} onScroll={e=>{const el=e.currentTarget;followBottom.current=el.scrollHeight-el.clientHeight-el.scrollTop<120;}} className="max-h-[58dvh] min-h-[240px] overflow-y-auto overscroll-contain rounded-xl bg-background/50 p-3 space-y-3" aria-label="Mensagens">
@@ -348,11 +365,12 @@ function Media({row,payload,cryptoKey,onScan}:{row:Envelope;payload:ChatPayload;
  useEffect(()=>{active.current=true;return()=>{active.current=false}},[]);
  useEffect(()=>{if(!blob)return;const u=URL.createObjectURL(blob);setUrl(u);return()=>URL.revokeObjectURL(u)},[blob]);
  async function load(){
+  if(busy||blob)return;
   setBusy(true);setError("");
   try{const b=await readMedia(cryptoKey,row,payload);if(active.current)setBlob(b);}catch{if(active.current)setError("Não foi possível abrir o anexo cifrado.");}finally{if(active.current)setBusy(false)}
  }
  return <div className="mt-2 space-y-2 min-w-0">
-  {!blob?<Button size="sm" variant="outline" disabled={busy} onClick={()=>void load()}>{busy?"Abrindo...":payload.media?.kind==="image"?"Abrir foto":"Ouvir áudio"}</Button>:payload.media?.kind==="image"?<><img src={url} alt="Foto compartilhada" className="max-h-64 max-w-full rounded-lg object-contain"/><Button size="sm" variant="outline" onClick={()=>onScan(new File([blob],"connect-"+row.id+".jpg",{type:"image/jpeg"}))}>Ler no scanner</Button></>:<audio controls src={url} preload="metadata" className="w-full max-w-full"/>}
+  {!blob?<Button size="sm" variant="outline" disabled={busy} onClick={()=>void load()}>{busy?"Abrindo...":payload.media?.kind==="image"?"Abrir foto":"Ouvir áudio"}</Button>:payload.media?.kind==="image"?<><img src={url} alt="Foto compartilhada" className="max-h-64 max-w-full rounded-lg object-contain"/><Button size="sm" variant="outline" onClick={()=>onScan(new File([blob],"connect-"+row.id+".jpg",{type:"image/jpeg"}))}>Ler no scanner</Button></>:<audio controls autoPlay src={url} preload="metadata" className="w-full max-w-full"/>}
   {error&&<p className="text-xs text-destructive">{error}</p>}
  </div>;
 }
