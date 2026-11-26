@@ -10,6 +10,7 @@ import { getVoltaraSnapshot, setVoltara, subscribeVoltara } from "./store";
 import { parseBackup } from "./storage";
 
 const PERSONAL_BACKUP_KEY = "voltara:before-sharing:v1";
+const SHARED_CACHE_KEY = "voltara:shared-cache:v1";
 
 type SyncPhase = "local" | "connecting" | "online" | "empty" | "error";
 export interface CloudStatus {
@@ -150,7 +151,7 @@ async function fetchRows(householdId: string): Promise<SharedRecord[]> {
 
 function retainLocalBackup() {
   try {
-    if (!window.localStorage.getItem(PERSONAL_BACKUP_KEY)) {
+    if (!window.localStorage.getItem(SHARED_CACHE_KEY) && !activeId) {
       window.localStorage.setItem(PERSONAL_BACKUP_KEY, JSON.stringify(getVoltaraSnapshot()));
     }
   } catch {
@@ -163,6 +164,7 @@ function applyRemote(records: SharedRecord[]) {
   syncingFromRemote = true;
   try {
     retainLocalBackup();
+    try { window.localStorage.setItem(SHARED_CACHE_KEY, "yes"); } catch { /* armazenamento bloqueado */ }
     setVoltara(validated);
     lastObserved = toSharedRecords(validated);
   } finally {
@@ -408,7 +410,9 @@ export async function discardPendingChanges(): Promise<void> {
 }
 
 export function disconnectAfterAuthLoss() {
-  if (status.phase === "local") return;
+  let sharedCache = false;
+  try { sharedCache = window.localStorage.getItem(SHARED_CACHE_KEY) === "yes"; } catch { /* storage bloqueado */ }
+  if (status.phase === "local" && !sharedCache) return;
   clearActive();
   let restore = defaultState();
   try {
@@ -416,6 +420,7 @@ export function disconnectAfterAuthLoss() {
     if (previous) restore = parseBackup(previous);
   } catch { /* não manter a casa anterior visível após sair */ }
   setVoltara(restore);
+  try { window.localStorage.removeItem(SHARED_CACHE_KEY); } catch { /* armazenamento bloqueado */ }
   // Other tabs may still need the backup after an auth event.
 }
 
