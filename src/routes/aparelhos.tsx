@@ -39,6 +39,7 @@ function AppliancesPage() {
   }
 
   function addPreset() {
+    if (state.appliances.length >= 100) { setFeedback("Limite de 100 aparelhos atingido."); return; }
     const source = PRESETS[Number(preset)];
     if (!source) return;
     const newAppliance = { ...source, id: uid() } as Appliance;
@@ -47,9 +48,10 @@ function AppliancesPage() {
   }
 
   function addCustom() {
+    if (state.appliances.length >= 100) { setFeedback("Limite de 100 aparelhos atingido."); return; }
     const name = customName.trim();
-    if (!name) {
-      setFeedback("Informe o nome do aparelho personalizado.");
+    if (!name || name.length > 80) {
+      setFeedback("Informe um nome de aparelho com até 80 caracteres.");
       return;
     }
     const base = { id: uid(), name, icon: "plug", enabled: true, uncertainty: 0.25 };
