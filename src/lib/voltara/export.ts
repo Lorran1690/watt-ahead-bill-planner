@@ -2,7 +2,12 @@ import { billError, projection } from "./calc";
 import type { MonthKey, VoltaraState } from "./types";
 import { roomName } from "./rooms";
 
-const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+const esc = (v: string | number) => {
+  // Spreadsheet formula injection: preserve content as text even when opened in Excel.
+  const text = String(v);
+  const safe = typeof v === "string" && /^[\s\uFEFF]*[=+\-@\t\r\n]/.test(text) ? "'" + text : text;
+  return `"${safe.replace(/"/g, '""')}"`;
+};
 const n = (v: number) => v.toFixed(2).replace(".", ",");
 
 export function projectionCsv(state: VoltaraState, from: MonthKey): string {
