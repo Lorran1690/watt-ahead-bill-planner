@@ -15,7 +15,7 @@ import {loadPair,listMessages,listReceipts,markRead,typing,peerTyping,queueMessa
 import {newPairSecret,pairScope,unlockPair,openMessage,type ChatPayload,type Envelope} from "@/lib/voltara/connect-crypto";
 import {queued} from "@/lib/voltara/connect-queue";
 import {isPairMessage,mergeTimeline,timelineWithQueue} from "@/lib/voltara/connect-timeline";
-import {pushConfigured,subscribeConnectPush,unsubscribeConnectPush} from "@/lib/voltara/connect-push";
+import {getConnectPushConfig,getConnectPushStatus,supportsConnectPush,subscribeConnectPush,unsubscribeConnectPush} from "@/lib/voltara/connect-push";
 
 export const Route=createFileRoute("/connect")({head:()=>({meta:[{title:"Voltara Connect"}]}),component:ConnectPage});
 
@@ -88,6 +88,8 @@ function Conversation({pair}:{pair:Pair}){
  const [olderAvailable,setOlderAvailable]=useState(true);
  const [notifications,setNotifications]=useState(false);
  const [pushActive,setPushActive]=useState(false);
+ const [pushConfig,setPushConfig]=useState<{publicKey:string}|null>(null);
+ const [pushStatus,setPushStatus]=useState("Verificando notificações...");
  const [pushBusy,setPushBusy]=useState(false);
  const [favorite,setFavorite]=useState<string[]>([]);
  const [pinned,setPinned]=useState<string[]>([]);
@@ -271,9 +273,25 @@ function Conversation({pair}:{pair:Pair}){
    });
   }catch(e){report(e);}
  }
+ useEffect(()=>{
+  if(!key)return;
+  let active=true;
+  async function check(){
+   if(!supportsConnectPush()){if(active)setPushStatus("Notificações push não são suportadas neste navegador.");return;}
+   try{
+    const config=await getConnectPushConfig(pair);
+    const status=await getConnectPushStatus(pair);
+    if(active){setPushConfig(config);setPushActive(status==="active");setPushStatus(status==="active"?"Notificações ativadas neste aparelho.":status==="blocked"?"Permissão bloqueada nas configurações do navegador.":"Notificações desativadas neste aparelho.");}
+   }catch{if(active){setPushConfig(null);setPushActive(false);setPushStatus("Servidor de notificações ainda não disponível.");}}
+  }
+  void check();
+  const onFocus=()=>{void check();};
+  window.addEventListener("focus",onFocus);
+  return()=>{active=false;window.removeEventListener("focus",onFocus);};
+ },[key,pair.scope]);
  async function togglePush(enable:boolean){
   if(pushBusy)return;setPushBusy(true);setError("");
-  try{if(!enable){await unsubscribeConnectPush(pair);setPushActive(false);}else{await subscribeConnectPush(pair);setPushActive(true);notificationRef.current=false;setNotifications(false);}}catch(e){report(e);}finally{if(alive.current)setPushBusy(false);}
+  try{if(!enable){await unsubscribeConnectPush(pair);setPushActive(false);setPushStatus("Notificações desativadas neste aparelho.");}else{if(!pushConfig)throw Error("Servidor de notificações ainda não disponível.");await subscribeConnectPush(pair,pushConfig);const status=await getConnectPushStatus(pair);setPushActive(status==="active");setPushStatus(status==="active"?"Notificações ativadas neste aparelho.":"Não foi possível confirmar a inscrição.");if(status==="active"){notificationRef.current=false;setNotifications(false);}}}catch(e){report(e);}finally{if(alive.current)setPushBusy(false);}
  }
  async function enableNotifications(){
   if(!("Notification" in window))return report(Error("Notificações não disponíveis."));
@@ -350,8 +368,8 @@ function Conversation({pair}:{pair:Pair}){
     </div>
    </form>
    <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={typingAllowed} onChange={e=>setTypingAllowed(e.target.checked)}/>Compartilhar indicador de digitação</label>
-   <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={pushActive} onClick={()=>void enableNotifications()}>{notifications?"Avisos locais autorizados":"Autorizar avisos locais"}</Button>{pushConfigured&&<Button size="sm" variant="outline" disabled={pushBusy} onClick={()=>void togglePush(true)}>{pushActive?"Push ativado nesta sessão":"Ativar notificações push"}</Button>}{pushConfigured&&<Button size="sm" variant="ghost" disabled={pushBusy} onClick={()=>void togglePush(false)}>Desativar push neste aparelho</Button>}</div>
-   <p className="text-xs text-muted-foreground">Avisos locais enquanto a conversa estiver aberta. {pushConfigured?"Push requer autorização e suporte do aparelho.":"Push com aplicativo fechado aguarda configuração do servidor."} Busca e galeria abrangem apenas mensagens carregadas. Favoritos e fixados são locais.</p>
+   <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={pushActive} onClick={()=>void enableNotifications()}>{notifications?"Avisos locais autorizados":"Autorizar avisos locais"}</Button>{pushConfig&&<Button size="sm" variant="outline" disabled={pushBusy||pushActive} onClick={()=>void togglePush(true)}>{pushActive?"Notificações ativadas":"Ativar notificações push"}</Button>}{pushConfig&&<Button size="sm" variant="ghost" disabled={pushBusy||!pushActive} onClick={()=>void togglePush(false)}>Desativar push neste aparelho</Button>}</div>
+   <p className="text-xs text-muted-foreground">Avisos locais enquanto a conversa estiver aberta. {pushStatus} Busca e galeria abrangem apenas mensagens carregadas. Favoritos e fixados são locais.</p>
   </Panel>
   <Panel title="Compartilhar gasto existente" hint="Envia somente o resumo escolhido, não cria um novo lançamento.">
    <select aria-label="Gasto para compartilhar" className="w-full rounded-lg border bg-background p-2 text-sm" value={selectedExpense} onChange={e=>setSelectedExpense(e.target.value)}><option value="">Selecione um gasto</option>{state.expenses.slice(-100).map(e=><option key={e.id} value={e.id}>{e.note||"Gasto"} · {money(e.amount)}</option>)}</select>
