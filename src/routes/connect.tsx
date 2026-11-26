@@ -131,7 +131,7 @@ function Conversation({pair}:{pair:Pair}){
    setRows(old=>[...new Map([...old,...latest].map(e=>[e.id,e])).values()].sort((a,b)=>(a.created_at??"").localeCompare(b.created_at??"")||a.id.localeCompare(b.id)));
    setConnected(true);
    if(known.current&&notificationRef.current&&latest.some(e=>e.sender_id===pair.peer&&!known.current!.has(e.id))&&document.hidden){
-    void navigator.serviceWorker?.ready.then(reg=>reg.showNotification("Voltara Connect",{body:"Você recebeu uma nova mensagem privada.",tag:"voltara-connect"})).catch(()=>{});
+    void navigator.serviceWorker?.ready.then(reg=>reg.showNotification("Voltara Connect",{body:"Você recebeu uma nova mensagem privada.",tag:"voltara-connect",data:{type:"voltara-connect"}})).catch(()=>{});
    }
    known.current=new Set(latest.map(e=>e.id));
    setPending((await queued(pair.scope)).length);
@@ -237,9 +237,9 @@ function Conversation({pair}:{pair:Pair}){
    });
   }catch(e){report(e);}
  }
- async function togglePush(){
+ async function togglePush(enable:boolean){
   if(pushBusy)return;setPushBusy(true);setError("");
-  try{if(pushActive){await unsubscribeConnectPush(pair);setPushActive(false);}else{await subscribeConnectPush(pair);setPushActive(true);notificationRef.current=false;setNotifications(false);}}catch(e){report(e);}finally{if(alive.current)setPushBusy(false);}
+  try{if(!enable){await unsubscribeConnectPush(pair);setPushActive(false);}else{await subscribeConnectPush(pair);setPushActive(true);notificationRef.current=false;setNotifications(false);}}catch(e){report(e);}finally{if(alive.current)setPushBusy(false);}
  }
  async function enableNotifications(){
   if(!("Notification" in window))return report(Error("Notificações não disponíveis."));
@@ -315,7 +315,7 @@ function Conversation({pair}:{pair:Pair}){
     </div>
    </form>
    <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={typingAllowed} onChange={e=>setTypingAllowed(e.target.checked)}/>Compartilhar indicador de digitação</label>
-   <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={pushActive} onClick={()=>void enableNotifications()}>{notifications?"Avisos locais autorizados":"Autorizar avisos locais"}</Button>{pushConfigured&&<Button size="sm" variant="outline" disabled={pushBusy} onClick={()=>void togglePush()}>{pushActive?"Desativar push":"Ativar notificações push"}</Button>}</div>
+   <div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" disabled={pushActive} onClick={()=>void enableNotifications()}>{notifications?"Avisos locais autorizados":"Autorizar avisos locais"}</Button>{pushConfigured&&<Button size="sm" variant="outline" disabled={pushBusy} onClick={()=>void togglePush(true)}>{pushActive?"Push ativado nesta sessão":"Ativar notificações push"}</Button>}{pushConfigured&&<Button size="sm" variant="ghost" disabled={pushBusy} onClick={()=>void togglePush(false)}>Desativar push neste aparelho</Button>}</div>
    <p className="text-xs text-muted-foreground">Avisos locais enquanto a conversa estiver aberta. {pushConfigured?"Push requer autorização e suporte do aparelho.":"Push com aplicativo fechado aguarda configuração do servidor."} Busca e galeria abrangem apenas mensagens carregadas. Favoritos e fixados são locais.</p>
   </Panel>
   <Panel title="Compartilhar gasto existente" hint="Envia somente o resumo escolhido, não cria um novo lançamento.">
