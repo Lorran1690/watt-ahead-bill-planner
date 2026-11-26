@@ -26,7 +26,7 @@ function Dashboard() {
   const conf = confidence(state, now);
   const f = forecastMonth(state, now, { calibration: conf.calibration, extraUncertainty: conf.extra });
   const proj = projection(state, addMonths(now, 1), 12);
-  const ref = state.settings.referenceValue;
+  const ref = conf.calibration.billValue;
   const delta = ref > 0 ? (f.cost - ref) / ref : null;
   const counts = dayTypeCounts(now);
   const waterThisMonth = state.waterBills.find((bill) => bill.month === now);
