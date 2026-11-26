@@ -1,5 +1,6 @@
 import {getCloudClient} from "./cloud-client";
 import {sealBytes,openBytes,sealMessage,mediaPath,type Envelope,type ChatPayload} from "./connect-crypto";
+import {notifyConnectPush} from "./connect-push";
 import {enqueue,queued,acknowledge,type Queued} from "./connect-queue";
 
 export const bucketName="voltara-connect-private";
@@ -74,6 +75,7 @@ export async function flushMessages(pair:Pair,active:()=>boolean){
   const confirmed=await c.from("voltara_chat_messages").select("ciphertext,has_media,sender_id,recipient_id").eq("id",e.id).single();
   if(confirmed.error||confirmed.data.ciphertext!==e.ciphertext||confirmed.data.has_media!==e.has_media||confirmed.data.sender_id!==pair.me||confirmed.data.recipient_id!==pair.peer)throw Error("Confirmação da mensagem não corresponde.");
   await acknowledge(q.id);
+  if(active())void notifyConnectPush(pair,e.id);
  }
 }
 export async function readMedia(key:CryptoKey,e:Envelope,p:ChatPayload){
