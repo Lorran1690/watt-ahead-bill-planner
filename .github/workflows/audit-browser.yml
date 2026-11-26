@@ -1,0 +1,44 @@
+name: Auditoria Voltara navegador
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'scripts/voltara-browser-audit.cjs'
+      - '.github/workflows/audit-browser.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    name: Chromium isolado e auditoria de dependências
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - name: Auditoria de dependências
+        continue-on-error: true
+        run: bun audit
+      - name: Instalar Chromium de teste
+        run: |
+          npm install --prefix "$RUNNER_TEMP/voltara-browser" --no-audit --no-fund playwright@1.57.0
+          node "$RUNNER_TEMP/voltara-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Testar interface e armazenamento local
+        env:
+          VOLTARA_PLAYWRIGHT_ROOT: ${{ runner.temp }}/voltara-browser
+        run: |
+          bun run dev --host 127.0.0.1 --port 4173 --strictPort > /tmp/voltara-dev.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true; cat /tmp/voltara-dev.log' EXIT
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:4173/ >/dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:4173/ >/dev/null
+          node scripts/voltara-browser-audit.cjs
