@@ -49,6 +49,7 @@ function WaterPage() {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!editingId && state.waterBills.length >= 240) { setError("Limite de 240 contas de água atingido."); return; }
     const amount = Number(value.trim().replace(",", "."));
     const volume = m3.trim() ? Number(m3.trim().replace(",", ".")) : undefined;
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
