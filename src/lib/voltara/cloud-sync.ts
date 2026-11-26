@@ -3,7 +3,8 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getCloudClient } from "./cloud-client";
 import { PUBLIC_APP_ORIGIN, PUBLIC_SHARING_URL } from "./public-url";
 import { parseVoltaraConfirmationLink } from "./auth-link";
-import { diffSharedRecords, fromSharedRecords, toSharedRecords, type SharedRecord } from "./cloud-records";
+import { diffSharedRecords, fromSharedRecords, toSharedRecords, overlayRecordChanges, recordId, type RecordChange, type SharedRecord } from "./cloud-records";
+import { journalKey, mergeJournal, readJournal, saveJournal } from "./sync-journal";
 import { defaultState } from "./defaults";
 import { getVoltaraSnapshot, setVoltara, subscribeVoltara } from "./store";
 import { parseBackup } from "./storage";
@@ -25,10 +26,14 @@ const listeners = new Set<() => void>();
 let activeId: string | null = null;
 let channel: RealtimeChannel | null = null;
 let unsubscribeLocal: (() => void) | null = null;
-let lastCommitted: SharedRecord[] = [];
+let lastObserved: SharedRecord[] = [];
+let journal: RecordChange[] = [];
+let activeJournalKey: string | null = null;
+let writing = false;
+let retryTimer: ReturnType<typeof setInterval> | null = null;
+let journalDurable = true;
 let syncingFromRemote = false;
 let pending = 0;
-let chained: Promise<void> = Promise.resolve();
 let syncing = false;
 let connectionGeneration = 0;
 let startingHousehold: string | null = null;
@@ -122,7 +127,8 @@ async function fetchRows(householdId: string): Promise<SharedRecord[]> {
   const client = assertBrowser();
   const output: SharedRecord[] = [];
   // Data API geralmente limita consultas a 1000 linhas; buscar todas as páginas.
-  for (let start = 0; start < 10000; start += 500) {
+  for (let start = 0; start <= 11000; start += 500) {
+    if (start === 11000) throw new Error("A casa excedeu o limite de registros suportado. Nenhum dado foi substituído.");
     const { data, error } = await client.from("voltara_records")
       .select("kind,record_key,document")
       .eq("household_id", householdId)
@@ -158,76 +164,95 @@ function applyRemote(records: SharedRecord[]) {
   try {
     retainLocalBackup();
     setVoltara(validated);
-    lastCommitted = records;
+    lastObserved = toSharedRecords(validated);
   } finally {
     syncingFromRemote = false;
   }
 }
 
+function persistJournal() {
+  if (!activeJournalKey) return;
+  try {
+    saveJournal(window.localStorage, activeJournalKey, journal);
+    journalDurable = true;
+  } catch {
+    journalDurable = false;
+  }
+  pending = journal.length;
+  setStatus({ pending });
+}
+
 async function refreshFromCloud() {
-  if (!activeId || pending > 0 || syncing) return;
+  if (!activeId || journal.length || writing || syncing) return;
   syncing = true;
   const id = activeId;
+  const generation = connectionGeneration;
   try {
     const rows = await fetchRows(id);
-    // Uma edição local pode ter acontecido durante a consulta: não sobrescrevê-la.
-    if (activeId !== id || pending > 0) return;
+    if (generation !== connectionGeneration || activeId !== id || journal.length || writing) return;
     if (rows.length === 0) {
-      setStatus({ phase: "empty", message: "A casa ainda não tem dados compartilhados." });
+      setStatus({ phase: "empty", message: "A casa não tem dados disponíveis. Confira sua associação antes de editar." });
       return;
     }
     applyRemote(rows);
     setStatus({ phase: "online", message: "", pending: 0 });
   } catch (error) {
-    setStatus({ phase: "error", message: error instanceof Error ? error.message : "Erro ao receber atualizações." });
+    if (generation === connectionGeneration) setStatus({ phase: "error", message: error instanceof Error ? error.message : "Erro ao receber atualizações." });
   } finally {
-    syncing = false;
+    if (generation === connectionGeneration) syncing = false;
+  }
+}
+
+async function flushJournal() {
+  if (!activeId || writing || !journal.length) return;
+  const id = activeId;
+  const generation = connectionGeneration;
+  writing = true;
+  try {
+    const client = assertBrowser();
+    while (journal.length && generation === connectionGeneration) {
+      const change = journal[0]!;
+      if (change.operation === "delete") {
+        const { error } = await client.from("voltara_records").delete()
+          .eq("household_id", id).eq("kind", change.kind).eq("record_key", change.record_key);
+        if (error) throw error;
+      } else {
+        const { error } = await client.from("voltara_records").upsert({
+          household_id: id, kind: change.kind, record_key: change.record_key, document: change.document,
+        }, { onConflict: "household_id,kind,record_key" });
+        if (error) throw error;
+      }
+      // Do not acknowledge a newer edit of this same record that arrived while sending.
+      if (generation !== connectionGeneration) return;
+      journal = journal.filter(item => item !== change);
+      persistJournal();
+    }
+    if (generation === connectionGeneration) setStatus({ phase: "online", message: "" });
+  } catch (error) {
+    if (generation !== connectionGeneration) return;
+    const duplicate = typeof error === "object" && error !== null && "code" in error && error.code === "23505";
+    setStatus({ phase: "error", message: duplicate
+      ? "Conflito: outro aparelho já cadastrou uma fatura deste mês. Exporte o backup e confira o histórico antes de reenviar."
+      : journalDurable ? "Alterações guardadas neste aparelho, aguardando reconexão."
+      : "Alterações ainda na memória. O armazenamento local falhou: exporte um backup antes de fechar." });
+  } finally {
+    if (generation === connectionGeneration) {
+      writing = false;
+      if (!journal.length && status.phase !== "error") await refreshFromCloud();
+    }
   }
 }
 
 function handleLocalChange() {
   if (syncingFromRemote || !activeId) return;
   const target = toSharedRecords(getVoltaraSnapshot());
-  if (!diffSharedRecords(lastCommitted, target).length) return;
-  const householdId = activeId;
-  pending++;
-  setStatus({ pending, message: "" });
-  chained = chained.catch(() => {}).then(async () => {
-    if (activeId !== householdId) return;
-    const client = assertBrowser();
-    const changes = diffSharedRecords(lastCommitted, target);
-    try {
-      for (const change of changes) {
-        if (change.operation === "delete") {
-          const { error } = await client.from("voltara_records").delete()
-            .eq("household_id", householdId)
-            .eq("kind", change.kind)
-            .eq("record_key", change.record_key);
-          if (error) throw error;
-        } else {
-          const { error } = await client.from("voltara_records").upsert({
-            household_id: householdId,
-            kind: change.kind,
-            record_key: change.record_key,
-            document: change.document,
-          }, { onConflict: "household_id,kind,record_key" });
-          if (error) throw error;
-        }
-      }
-      lastCommitted = target;
-      setStatus({ phase: "online", message: "" });
-    } catch (error) {
-      setStatus({
-        phase: "error",
-        message: "Alteração salva neste dispositivo, mas não enviada. " +
-          (error instanceof Error ? error.message : "Verifique a conexão."),
-      });
-    } finally {
-      pending = Math.max(0, pending - 1);
-      setStatus({ pending });
-      if (pending === 0 && status.phase !== "error") await refreshFromCloud();
-    }
-  });
+  const changes = diffSharedRecords(lastObserved, target);
+  if (!changes.length) return;
+  lastObserved = target;
+  journal = mergeJournal(journal, changes);
+  persistJournal();
+  setStatus({ message: journalDurable ? "Enviando alterações..." : "Armazenamento local indisponível. Exporte um backup antes de fechar." });
+  void flushJournal();
 }
 
 function clearActive() {
@@ -236,11 +261,17 @@ function clearActive() {
   unsubscribeLocal?.();
   unsubscribeLocal = null;
   if (channel && client) void client.removeChannel(channel);
+  if (retryTimer !== null) clearInterval(retryTimer);
+  retryTimer = null;
   channel = null;
   activeId = null;
+  activeJournalKey = null;
+  journal = [];
   pending = 0;
-  lastCommitted = [];
-  chained = Promise.resolve();
+  lastObserved = [];
+  writing = false;
+  syncing = false;
+  journalDurable = true;
   setStatus({ phase: "local", householdId: null, message: "", pending: 0 });
 }
 
@@ -256,17 +287,35 @@ export function startHouseholdSync(householdId: string): Promise<void> {
     const generation = connectionGeneration;
     setStatus({ phase: "connecting", householdId, message: "Conectando à casa..." });
     try {
-      const rows = await fetchRows(householdId);
-      // Um logout/troca de casa pode ter ocorrido enquanto a consulta estava em andamento.
+      const client = assertBrowser();
+      const { data: { user }, error } = await client.auth.getUser();
+      if (error || !user) throw new Error("Sessão indisponível. Entre novamente.");
       if (generation !== connectionGeneration) return;
-      if (rows.length === 0) {
+      const key = journalKey(user.id, householdId);
+      const rows = await fetchRows(householdId);
+      if (generation !== connectionGeneration) return;
+      let saved: RecordChange[];
+      try {
+        saved = readJournal(window.localStorage, key);
+      } catch {
+        throw new Error("Não foi possível recuperar a fila local. Exporte um backup e verifique o armazenamento antes de continuar.");
+      }
+      if (!rows.length && !saved.length) {
         setStatus({ phase: "empty", householdId, message: "Esta casa ainda não possui dados para sincronizar." });
         return;
       }
-      applyRemote(rows);
+      // Restore only queued edits belonging to this user and this house. Never
+      // overwrite all records with a stale copy of the household.
+      applyRemote(overlayRecordChanges(rows, saved));
       activeId = householdId;
+      activeJournalKey = key;
+      journal = saved;
+      persistJournal();
       unsubscribeLocal = subscribeVoltara(handleLocalChange);
-      const client = assertBrowser();
+      retryTimer = setInterval(() => {
+        if (journal.length) void flushJournal();
+        else void refreshFromCloud();
+      }, 15000);
       channel = client.channel("voltara-family-" + householdId)
         .on("postgres_changes", {
           event: "*",
@@ -279,11 +328,12 @@ export function startHouseholdSync(householdId: string): Promise<void> {
         })
         .subscribe((s) => {
           if (generation !== connectionGeneration) return;
-          if (s === "SUBSCRIBED") setStatus({ phase: "online", householdId, message: "" });
+          if (s === "SUBSCRIBED" && !journal.length) setStatus({ phase: "online", householdId, message: "" });
           if (s === "CHANNEL_ERROR" || s === "TIMED_OUT" || s === "CLOSED") {
             setStatus({ phase: "error", householdId, message: "Conexão em tempo real interrompida. Tente reconectar." });
           }
         });
+      if (journal.length) void flushJournal();
     } catch (error) {
       if (generation === connectionGeneration) {
         setStatus({ phase: "error", householdId, message: error instanceof Error ? error.message : "Falha ao conectar à casa." });
@@ -311,40 +361,31 @@ export async function importLocalToHousehold(householdId: string): Promise<void>
   }
   retainLocalBackup();
   const items = toSharedRecords(getVoltaraSnapshot());
-  for (const item of items) {
-    const { error } = await client.from("voltara_records").upsert({
-      household_id: householdId,
-      kind: item.kind,
-      record_key: item.record_key,
-      document: item.document,
-    }, { onConflict: "household_id,kind,record_key" });
-    if (error) throw error;
-  }
+  const { error } = await client.from("voltara_records").insert(items.map(item => ({
+    household_id: householdId, kind: item.kind, record_key: item.record_key, document: item.document,
+  })));
+  if (error) throw error;
   await startHouseholdSync(householdId);
 }
 
 /** Reconecta e tenta enviar alterações locais após uma interrupção. */
 export async function retryHouseholdSync() {
   if (activeId) {
-    const changes = diffSharedRecords(lastCommitted, toSharedRecords(getVoltaraSnapshot()));
-    if (changes.length) {
-      handleLocalChange();
-      return;
-    }
-    if (status.phase === "error") {
-      await startHouseholdSync(activeId);
-      return;
-    }
-    await refreshFromCloud();
+    if (journal.length) await flushJournal();
+    else await refreshFromCloud();
   } else if (status.householdId) {
     await startHouseholdSync(status.householdId);
   }
 }
 
 export async function signOutFamily(): Promise<void> {
-  clearActive();
+  if (journal.length || writing) throw new Error("Há alterações pendentes. Sincronize ou exporte um backup antes de sair.");
   const client = getCloudClient();
-  if (client) await client.auth.signOut();
+  if (client) {
+    const { error } = await client.auth.signOut();
+    if (error) throw error;
+  }
+  clearActive();
   let restore: VoltaraState = defaultState();
   try {
     const previous = window.localStorage.getItem(PERSONAL_BACKUP_KEY);
@@ -353,4 +394,5 @@ export async function signOutFamily(): Promise<void> {
     // Evita manter os lançamentos da casa compartilhada em sessão encerrada.
   }
   setVoltara(restore);
+  try { window.localStorage.removeItem(PERSONAL_BACKUP_KEY); } catch { /* armazenamento indisponível */ }
 }
