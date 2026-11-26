@@ -46,7 +46,7 @@ function FamilyAutoConnect() {
           if (!error || error.name === "AuthSessionMissingError") disconnectAfterAuthLoss();
           return;
         }
-        if (previousUser && previousUser !== user.id) disconnectAfterAuthLoss();
+        if (previousUser && previousUser !== user.id) { void clearConnectPushOnSignOut().catch(() => {}); disconnectAfterAuthLoss(); }
         previousUser = user.id;
         const membership = await findMyHousehold();
         if (!active) return;
