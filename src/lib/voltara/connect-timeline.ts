@@ -9,6 +9,16 @@ export function isPairMessage(value: unknown,pair:Pair):value is Envelope {
  typeof r.has_media==="boolean"&&r.household_id===pair.house&&
  ((r.sender_id===pair.me&&r.recipient_id===pair.peer)||(r.sender_id===pair.peer&&r.recipient_id===pair.me));
 }
+function compareTimeline(a:Envelope,b:Envelope){
+ const timestamp=(row:Envelope)=>{
+  const at=row.created_at??"";
+  const milliseconds=Date.parse(at);
+  const fraction=(at.match(/\.(\d+)(?:Z|[+-]\d{2}:\d{2})$/)?.[1]??"").padEnd(6,"0");
+  return Number.isFinite(milliseconds)?milliseconds*1000+Number(fraction.slice(3,6)):-Infinity;
+ };
+ const first=timestamp(a),second=timestamp(b);
+ return (first===second?0:first<second?-1:1)||a.id.localeCompare(b.id);
+}
 export function mergeTimeline(current:Envelope[],incoming:Envelope[]):Envelope[]{
  const map=new Map(current.map(row=>[row.id,row]));
  let changed=false;
@@ -17,7 +27,7 @@ export function mergeTimeline(current:Envelope[],incoming:Envelope[]):Envelope[]
   if(previous&&previous.created_at===row.created_at&&previous.ciphertext===row.ciphertext&&previous.has_media===row.has_media&&previous.sender_id===row.sender_id&&previous.recipient_id===row.recipient_id&&previous.household_id===row.household_id)continue;
   map.set(row.id,row);changed=true;
  }
- return changed?[...map.values()].sort((a,b)=>(a.created_at??"").localeCompare(b.created_at??"")||a.id.localeCompare(b.id)):current;
+ return changed?[...map.values()].sort(compareTimeline):current;
 }
 export function timelineWithQueue(confirmed:Envelope[],pending:Envelope[]){
  // The server timestamp wins over the provisional device timestamp.
