@@ -24,3 +24,10 @@ export function timelineWithQueue(confirmed:Envelope[],pending:Envelope[]){
  const ids=new Set(confirmed.map(row=>row.id));
  return mergeTimeline(confirmed,pending.filter(row=>!ids.has(row.id)));
 }
+
+/** Keyset cursor preserves rows sharing the same server timestamp. */
+export function olderMessageFilter(cursor:Pick<Envelope,"id"|"created_at">){
+ const at=cursor.created_at;
+ if(!at||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(at)||!Number.isFinite(Date.parse(at))||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cursor.id))throw Error("Cursor de mensagens inválido.");
+ return "created_at.lt."+at+",and(created_at.eq."+at+",id.lt."+cursor.id+")";
+}
