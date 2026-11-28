@@ -17,6 +17,7 @@ const routes = ["/","/gastos","/casa-3d","/aparelhos","/habitos","/contas","/agu
     const res=await page.goto(base+path,{waitUntil:"domcontentloaded"});
     assert.equal(res.status(),200,path+" HTTP");
     await page.locator("#voltara-main").waitFor({state:"visible"});
+    await page.locator("#voltara-main > div > :not([aria-label='Carregando'])").first().waitFor({state:"visible"});
     await page.locator("#voltara-main").locator("text=Não foi possível carregar esta página").count().then(n=>assert.equal(n,0));
   }
   async function state() { return page.evaluate(()=>JSON.parse(localStorage.getItem("voltara:v1")||"null")); }
@@ -30,7 +31,8 @@ const routes = ["/","/gastos","/casa-3d","/aparelhos","/habitos","/contas","/agu
   assert.equal((await state()).expenses[0].amount,17.9);
   await page.reload();
   await page.locator("#expense-filter").fill("2026-11");
-  await page.getByText("Auditoria local",{exact:true}).first().waitFor();
+  await page.locator("#voltara-main p").filter({hasText:/^Auditoria local/}).first().waitFor();
+  assert.equal((await state()).expenses[0].note,"Auditoria local");
   await page.getByRole("button",{name:"Editar gasto",exact:true}).click();
   await page.locator("#expense-amount").fill("21,50");
   await page.locator("form button[type=submit]").click();
