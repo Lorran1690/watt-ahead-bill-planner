@@ -142,11 +142,14 @@ export function loadState(kv: KV | null): VoltaraState {
   }
 }
 
-export function saveState(kv: KV | null, state: VoltaraState): void {
+export function saveState(kv: KV | null, state: VoltaraState): boolean {
+  if (!kv) return false;
   try {
-    kv?.setItem(STORAGE_KEY, JSON.stringify(state));
+    kv.setItem(STORAGE_KEY, JSON.stringify(state));
+    return true;
   } catch {
-    // Navegação privada, armazenamento desabilitado ou cota esgotada.
+    // Keep the in-memory state available for export, but report the failed write.
+    return false;
   }
 }
 
