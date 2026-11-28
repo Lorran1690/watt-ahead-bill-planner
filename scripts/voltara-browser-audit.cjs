@@ -29,7 +29,7 @@ const routes = ["/","/gastos","/casa-3d","/aparelhos","/habitos","/contas","/agu
   await page.locator("form button[type=submit]").click();
   await page.waitForFunction(()=>JSON.parse(localStorage.getItem("voltara:v1")||"{}").expenses?.length===1);
   assert.equal((await state()).expenses[0].amount,17.9);
-  await page.reload();
+  await open("/gastos");
   await page.locator("#expense-filter").fill("2026-11");
   await page.locator("#voltara-main p").filter({hasText:/^Auditoria local/}).first().waitFor();
   assert.equal((await state()).expenses[0].note,"Auditoria local");
