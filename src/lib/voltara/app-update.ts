@@ -1,5 +1,6 @@
 import release from "./release.json";
 import {getCloudStatus} from "./cloud-sync";
+import {localPersistenceFailed} from "./store";
 export const installedRelease=release;
 export function parseRelease(raw:unknown){
  if(!raw||typeof raw!=="object")throw Error("Informação de versão inválida.");
@@ -16,12 +17,14 @@ export async function checkAppUpdate(){
  return {latest,available:latest.revision!==installedRelease.revision};
 }
 export async function reloadApp(){
+ if(localPersistenceFailed())throw Error("O armazenamento local falhou. Exporte um backup antes de atualizar.");
  const sync=getCloudStatus();
  if(sync.pending>0||sync.phase==="connecting")throw Error("Há alterações financeiras pendentes. Sincronize antes de atualizar.");
  if(!navigator.onLine)throw Error("Conecte-se à internet antes de atualizar.");
  const registration="serviceWorker" in navigator?await navigator.serviceWorker.getRegistration():undefined;
  if(registration)await registration.update();
  // Recheck after awaiting worker update. Never clear storage, keys, cookies, cache or IndexedDB.
+ if(localPersistenceFailed())throw Error("O armazenamento local falhou. Exporte um backup antes de atualizar.");
  const after=getCloudStatus();
  if(after.pending>0||after.phase==="connecting")throw Error("Aguarde a sincronização dos dados.");
  const url=new URL(window.location.href);

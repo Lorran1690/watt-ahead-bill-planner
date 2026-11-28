@@ -5,6 +5,8 @@ import type { VoltaraState } from "./types";
 
 const SERVER = defaultState();
 let state: VoltaraState | null = null;
+let persistenceFailed = false;
+export const localPersistenceFailed = () => persistenceFailed;
 const listeners = new Set<() => void>();
 const kv = (): KV | null => {
   try { return typeof window === "undefined" ? null : window.localStorage; }
@@ -26,7 +28,7 @@ export function subscribeVoltara(listener: () => void): () => void {
 
 export function setVoltara(next: VoltaraState | ((s: VoltaraState) => VoltaraState)) {
   state = typeof next === "function" ? next(get()) : next;
-  saveState(kv(), state);
+  persistenceFailed = !saveState(kv(), state);
   listeners.forEach((l) => l());
 }
 export function useVoltara(): VoltaraState {
@@ -35,4 +37,8 @@ export function useVoltara(): VoltaraState {
     get,
     () => SERVER,
   );
+}
+
+export function useLocalPersistenceFailed(): boolean {
+  return useSyncExternalStore(subscribeVoltara, localPersistenceFailed, () => false);
 }

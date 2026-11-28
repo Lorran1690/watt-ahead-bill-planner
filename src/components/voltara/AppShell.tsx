@@ -1,4 +1,5 @@
 import { Link, Outlet } from "@tanstack/react-router";
+import { useLocalPersistenceFailed } from "@/lib/voltara/store";
 import { useEffect, useState } from "react";
 import { cloudConfigured, getCloudClient } from "@/lib/voltara/cloud-client";
 import { disconnectAfterAuthLoss, findMyHousehold, startHouseholdSync, getCloudStatus, useCloudStatus } from "@/lib/voltara/cloud-sync";
@@ -99,8 +100,37 @@ export function AppShell() {
     return startFamilyPresence(sync.householdId);
   }, [hydrated, sync.householdId]);
   const unread = useConnectUnread(sync.householdId, hydrated);
+  const persistenceFailed = useLocalPersistenceFailed();
   const unreadBadge = (to: string) => to === "/connect" && unread > 0 ? <span aria-label={unread+" mensagens não lidas"} className="absolute -right-2 -top-1 rounded-full bg-primary px-1 min-w-4 text-center text-[10px] font-bold text-primary-foreground">{unread > 99 ? "99+" : unread}</span> : null;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!hydrated) return;
+    const viewport = window.visualViewport;
+    const root = document.documentElement;
+    let baseline = window.innerHeight;
+    const update = () => {
+      const focused = document.activeElement;
+      const editing = focused instanceof HTMLElement &&
+        (focused.matches("textarea, input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]), [contenteditable=true]"));
+      const height = viewport?.height ?? window.innerHeight;
+      if (!editing) baseline = window.innerHeight;
+      const keyboard = window.matchMedia("(max-width: 767px)").matches &&
+        Boolean(editing) && Math.max(baseline - height, window.innerHeight - height) > 120;
+      root.dataset.voltaraKeyboard = String(keyboard);
+    };
+    viewport?.addEventListener("resize", update);
+    window.addEventListener("resize", update);
+    document.addEventListener("focusin", update);
+    document.addEventListener("focusout", update);
+    update();
+    return () => {
+      viewport?.removeEventListener("resize", update);
+      window.removeEventListener("resize", update);
+      document.removeEventListener("focusin", update);
+      document.removeEventListener("focusout", update);
+      delete root.dataset.voltaraKeyboard;
+    };
+  }, [hydrated]);
   const MOBILE_NAV = [NAV[0], NAV[1], NAV[NAV.length - 1]!];
   useEffect(() => {
     if (hydrated) startVoltaraPwa();
@@ -145,12 +175,13 @@ export function AppShell() {
 
       <main id="voltara-main" className="min-w-0 px-3 pb-[calc(6.75rem+env(safe-area-inset-bottom))] pt-4 sm:px-4 sm:pt-5 md:ml-20 md:px-8 md:pb-12 md:pt-8 lg:ml-56">
         <div className="mx-auto min-w-0 max-w-6xl">
+          {persistenceFailed && <div role="alert" className="mb-4 break-words rounded-xl border border-destructive/50 bg-card p-3 text-sm text-foreground">Não foi possível gravar os dados no armazenamento deste aparelho. Exporte um backup em <Link to="/configuracoes" className="font-semibold underline">Ajustes</Link> antes de fechar ou atualizar.</div>}
           {hydrated ? <Outlet /> : <div className="h-64 animate-pulse rounded-2xl bg-card" aria-label="Carregando" />}
         </div>
       </main>
 
       <nav aria-label="Navegação principal no celular"
-        className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-sidebar-border bg-sidebar/95 px-1 pt-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_30px_rgba(0,0,0,0.20)] backdrop-blur md:hidden">
+        className="voltara-mobile-nav fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-sidebar-border bg-sidebar/95 px-1 pt-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-12px_30px_rgba(0,0,0,0.20)] backdrop-blur md:hidden">
         {MOBILE_NAV.map(({ to, label, icon: Icon }) => (
           <Link key={to} to={to} activeOptions={{ exact: to === "/" }}
             className={cn("flex min-h-[62px] min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-center text-[12px] font-medium text-muted-foreground transition-colors data-[status=active]:bg-sidebar-accent data-[status=active]:text-primary")}>

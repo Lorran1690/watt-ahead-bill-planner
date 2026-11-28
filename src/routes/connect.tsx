@@ -81,7 +81,7 @@ function Conversation({pair}:{pair:Pair}){
  const pendingIds=useMemo(()=>{const confirmed=new Set(rows.map(r=>r.id));return new Set(outbox.filter(r=>!confirmed.has(r.id)).map(r=>r.id));},[rows,outbox]);
  const pending=pendingIds.size;
  const scrollRef=useRef<HTMLDivElement>(null),composerRef=useRef<HTMLTextAreaElement>(null),followBottom=useRef(true),forceBottom=useRef(false);
- const lockEpoch=useRef(0),flushAgain=useRef(false);
+ const lockEpoch=useRef(0),flushAgain=useRef(false),olderBusy=useRef(false);
  const [connected,setConnected]=useState(false);
  const [sending,setSending]=useState(false);
  const [typingAllowed,setTypingAllowed]=useState(false);
@@ -135,7 +135,7 @@ function Conversation({pair}:{pair:Pair}){
   }catch(e){report(e);}
  }
  function lock(){
-  unlocked.current=false;lockEpoch.current++;micEpoch.current++;setOutbox([]);setMicStarting(false);setVerified(false);stopRecording(true);setKey(null);setRows([]);setViews([]);setSecret("");setFingerprint("");setText("");setDraft(null);setScanFile(null);setReply(undefined);setFilter("");setSelectedExpense("");setRecording(false);setRead(new Set());seen.current.clear();known.current=null;decoded.current={key:null,messages:new Map()};
+  unlocked.current=false;lockEpoch.current++;micEpoch.current++;setOutbox([]);setMicStarting(false);setVerified(false);stopRecording(true);setKey(null);setRows([]);setViews([]);setOlderAvailable(true);setIsTyping(false);setSecret("");setFingerprint("");setText("");setDraft(null);setScanFile(null);setReply(undefined);setFilter("");setSelectedExpense("");setRecording(false);setRead(new Set());seen.current.clear();known.current=null;decoded.current={key:null,messages:new Map()};
  }
  async function refresh(){
   if(!alive.current||!unlocked.current||refreshBusy.current)return;
@@ -178,8 +178,8 @@ function Conversation({pair}:{pair:Pair}){
    .on("postgres_changes",{event:"INSERT",schema:"public",table:"voltara_chat_receipts",filter:"household_id=eq."+pair.house},onReceipt)
    .on("postgres_changes",{event:"*",schema:"public",table:"voltara_chat_typing",filter:"household_id=eq."+pair.house},onTyping)
    .subscribe(s=>{if(active&&s==="SUBSCRIBED"){onUpdate();onReceipt();onTyping();}});
-  const tick=()=>{if(active){void refresh();void flush();onReceipt();onTyping();}};
-  tick();const timer=window.setInterval(tick,5000);const typingTimer=window.setInterval(onTyping,3000);
+  const tick=()=>{if(active){void refresh();void flush();onReceipt();}};
+  tick();onTyping();const timer=window.setInterval(tick,5000);const typingTimer=window.setInterval(onTyping,3000);
   window.addEventListener("online",tick);
   return()=>{active=false;clearInterval(timer);clearInterval(typingTimer);window.removeEventListener("online",tick);void c.removeChannel(channel);};
  },[key,pair.scope]);
@@ -209,13 +209,17 @@ function Conversation({pair}:{pair:Pair}){
   return()=>{active=false};
  },[key,rows,pair.scope]);
  async function loadOlder(){
+  if(olderBusy.current||!unlocked.current)return;
+  const first=rows[0];if(!first?.created_at)return;
+  const generation=lockEpoch.current;
+  olderBusy.current=true;
   try{
-   const first=rows[0];if(!first?.created_at)return;
-   const older=await listMessages(pair,first.created_at);
-   if(!alive.current)return;
+   const older=await listMessages(pair,first);
+   if(!alive.current||!unlocked.current||generation!==lockEpoch.current)return;
    setOlderAvailable(older.length===50);
-   setRows(old=>[...new Map([...older,...old].map(e=>[e.id,e])).values()].sort((a,b)=>(a.created_at??"").localeCompare(b.created_at??"")||a.id.localeCompare(b.id)));
-  }catch(e){report(e);}
+   setRows(old=>mergeTimeline(old,older));
+  }catch(e){if(unlocked.current&&generation===lockEpoch.current)report(e);}
+  finally{olderBusy.current=false;}
  }
  async function send(e?:FormEvent,financial?:ChatPayload["financial"]){
   e?.preventDefault();if(!key||!verified||sending||recording||micStarting||(!text.trim()&&!draft&&!financial))return;
@@ -232,7 +236,8 @@ function Conversation({pair}:{pair:Pair}){
  }
  async function choosePhoto(file?:File){
   if(!file||!key||!verified)return;setError("");
-  try{const blob=await compressPhoto(file);if(alive.current&&unlocked.current)setDraft({blob,kind:"image",mime:"image/jpeg"});}catch(e){report(e);}
+  const generation=lockEpoch.current;
+  try{const blob=await compressPhoto(file);if(alive.current&&unlocked.current&&generation===lockEpoch.current)setDraft({blob,kind:"image",mime:"image/jpeg"});}catch(e){if(unlocked.current&&generation===lockEpoch.current)report(e);}
  }
  async function startRecording(){
   if(recording||micStarting||draft||!key||!verified)return;setError("");setMicStarting(true);const generation=++micEpoch.current;
@@ -335,9 +340,9 @@ function Conversation({pair}:{pair:Pair}){
    <div className="flex flex-wrap items-center gap-3"><div className="rounded-full bg-primary/15 p-3"><MessageCircle className="size-6 text-primary"/></div><div className="min-w-0 flex-1"><h2 className="font-semibold">Conversa da casa</h2><p className="text-xs text-muted-foreground">{isTyping?"Digitando...":peerStatus==="online"?"Online no Voltara":peerStatus==="unstable"?"Sinal instável":peerStatus==="offline"?"Sem sinal recente":"Presença indisponível"} · {connected?"Conectado":"Sem conexão confirmada"}</p></div><Button size="sm" variant="outline" onClick={lock}>Bloquear</Button></div>
    <details open={!verified} className="rounded-lg border p-2"><summary className="cursor-pointer text-xs text-muted-foreground">{verified?"Conversa verificada":"Verificar segurança da conversa"}</summary><p className="mt-2 text-xs break-words text-muted-foreground">Código de verificação: {fingerprint}. Compare pessoalmente nos dois aparelhos antes de conversar. Não compartilhe a chave.</p>
    <label className="mt-2 flex items-center gap-2 text-xs"><input type="checkbox" checked={verified} onChange={e=>setVerified(e.target.checked)}/>Confirmei que o código de verificação coincide nos dois aparelhos.</label></details>
-   <div className="flex flex-wrap gap-2 items-center"><Input aria-label="Pesquisar mensagens carregadas" value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Pesquisar mensagens..." className="flex-1 min-w-32"/>{(["all","media","favorites"] as const).map(m=><Button key={m} size="sm" variant={mode===m?"default":"outline"} onClick={()=>setMode(m)}>{m==="all"?"Conversa":m==="media"?"Galeria":"Favoritas"}</Button>)}</div>
+   <div className="flex flex-wrap gap-2 items-center"><Input aria-label="Pesquisar mensagens carregadas" value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Pesquisar mensagens..." className="w-full min-w-0 sm:flex-1"/>{(["all","media","favorites"] as const).map(m=><Button key={m} size="sm" variant={mode===m?"default":"outline"} onClick={()=>setMode(m)}>{m==="all"?"Conversa":m==="media"?"Galeria":"Favoritas"}</Button>)}</div>
    {pinned.length>0&&<div className="rounded-xl bg-primary/10 p-2 text-xs"><strong>Fixadas neste aparelho</strong>{views.filter(v=>pinned.includes(v.row.id)).map(v=><p key={v.row.id} className="break-words">{v.payload?.text||"Anexo / mensagem"}</p>)}</div>}
-   <div ref={scrollRef} onScroll={e=>{const el=e.currentTarget;followBottom.current=el.scrollHeight-el.clientHeight-el.scrollTop<120;}} className="max-h-[58dvh] min-h-[240px] overflow-y-auto overscroll-contain rounded-xl bg-background/50 p-3 space-y-3" aria-label="Mensagens">
+   <div ref={scrollRef} onScroll={e=>{const el=e.currentTarget;followBottom.current=el.scrollHeight-el.clientHeight-el.scrollTop<120;}} className="voltara-chat-messages max-h-[58dvh] min-h-[240px] overflow-y-auto overscroll-contain rounded-xl bg-background/50 p-3 space-y-3" aria-label="Mensagens">
     {rows.length>=50&&olderAvailable&&<Button size="sm" variant="ghost" onClick={()=>void loadOlder()}>Carregar anteriores</Button>}
     {!visible.length&&<p className="text-center text-sm text-muted-foreground py-12">Nenhuma mensagem neste filtro.</p>}
     {visible.map(v=><div key={v.row.id} data-chat-id={v.row.id} className={"flex "+(v.row.sender_id===pair.me?"justify-end":"justify-start")}>
@@ -361,9 +366,9 @@ function Conversation({pair}:{pair:Pair}){
    {pending>0&&<div role="status" className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span>{pending} mensagem(ns) na fila criptografada.</span><Button size="sm" variant="ghost" onClick={()=>void flush()}>Tentar enviar</Button></div>}
    {error&&<p role="alert" className="text-sm text-destructive">{error}</p>}
    {reply&&<div className="text-xs flex items-center gap-2">Respondendo: <span className="truncate">{views.find(v=>v.row.id===reply)?.payload?.text||"Mensagem"}</span><Button size="sm" variant="ghost" onClick={()=>setReply(undefined)}>Cancelar</Button></div>}
-   {draft&&<div className="rounded-lg border p-2 space-y-2">{draft.kind==="image"?<img src={preview} alt="Prévia da foto" className="max-h-40 rounded-lg"/>:<ConnectAudio url={preview}/>}<Button size="sm" variant="outline" onClick={()=>setDraft(null)}>Remover anexo</Button></div>}
-   <form className="sticky bottom-0 z-10 space-y-2 rounded-xl border bg-card p-2 shadow-lg" onSubmit={e=>void send(e)}>
-    <textarea ref={composerRef} aria-label="Mensagem" rows={1} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.nativeEvent.isComposing&&window.matchMedia("(pointer:fine)").matches){e.preventDefault();void send();}}} className="w-full resize-none rounded-xl border bg-background p-3 text-sm" placeholder="Digite sua mensagem..." maxLength={4000} value={text} onChange={e=>{setText(e.target.value);if(typingAllowed&&e.target.value.trim()&&Date.now()-lastTyping.current>3000){lastTyping.current=Date.now();void typing(pair).catch(()=>{});}}}/>
+   {draft&&<div className="rounded-lg border p-2 space-y-2">{draft.kind==="image"?<img src={preview} alt="Prévia da foto" className="max-h-40 max-w-full rounded-lg object-contain"/>:<ConnectAudio url={preview}/>}<Button size="sm" variant="outline" onClick={()=>setDraft(null)}>Remover anexo</Button></div>}
+   <form className="voltara-chat-composer sticky bottom-0 z-10 space-y-2 rounded-xl border bg-card p-2 shadow-lg" onSubmit={e=>void send(e)}>
+    <textarea ref={composerRef} aria-label="Mensagem" rows={1} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.nativeEvent.isComposing&&window.matchMedia("(pointer:fine)").matches){e.preventDefault();void send();}}} className="w-full min-w-0 resize-none rounded-xl border bg-background p-3 text-base sm:text-sm" placeholder="Digite sua mensagem..." maxLength={4000} value={text} onChange={e=>{setText(e.target.value);if(typingAllowed&&e.target.value.trim()&&Date.now()-lastTyping.current>3000){lastTyping.current=Date.now();void typing(pair).catch(()=>{});}}}/>
     <div className="flex flex-wrap gap-2">
      <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={e=>{void choosePhoto(e.target.files?.[0]);e.target.value="";}}/>
      <input ref={cameraInput} type="file" accept="image/*" capture="environment" hidden onChange={e=>{void choosePhoto(e.target.files?.[0]);e.target.value="";}}/>

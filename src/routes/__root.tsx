@@ -82,7 +82,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     // twitter:image here: every page without its own would inherit the root's preview image.
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" },
       { title: "Voltara — Gastos e Contas da Casa" },
       { name: "description", content: "Controle os gastos da casa, contas de luz e água e acompanhe sua Casa 3D." },
       { name: "theme-color", content: "#10111e" },

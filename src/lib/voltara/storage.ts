@@ -2,6 +2,7 @@ import { defaultState } from "./defaults";
 import type { Appliance, Bill, DailyExpense, Settings, VoltaraState, WaterBill } from "./types";
 import { isHouseRoom } from "./rooms";
 import { normalizeFinance } from "./finance";
+import { isValidExpenseDate } from "./expenses";
 
 export const STORAGE_KEY = "voltara:v1";
 export interface KV { getItem(k: string): string | null; setItem(k: string, v: string): void }
@@ -10,13 +11,7 @@ const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 
 const validNumber = (v: unknown, min = 0, max = Number.MAX_SAFE_INTEGER): v is number =>
   typeof v === "number" && Number.isFinite(v) && v >= min && v <= max;
 const validMonth = (v: unknown): v is string => typeof v === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
-const validDate = (v: unknown): v is string => {
-  if (typeof v !== "string" || !/^\d{4}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/.test(v)) return false;
-  const [y, m, d] = v.split("-").map(Number);
-  if (!y || !m || !d) return false;
-  const utc = new Date(Date.UTC(y, m - 1, d));
-  return utc.getUTCFullYear() === y && utc.getUTCMonth() === m - 1 && utc.getUTCDate() === d;
-};
+const validDate = (v: unknown): v is string => typeof v === "string" && isValidExpenseDate(v);
 const validName = (v: unknown, max = 80): v is string =>
   typeof v === "string" && v.trim().length > 0 && v.length <= max;
 
@@ -147,11 +142,14 @@ export function loadState(kv: KV | null): VoltaraState {
   }
 }
 
-export function saveState(kv: KV | null, state: VoltaraState): void {
+export function saveState(kv: KV | null, state: VoltaraState): boolean {
+  if (!kv) return false;
   try {
-    kv?.setItem(STORAGE_KEY, JSON.stringify(state));
+    kv.setItem(STORAGE_KEY, JSON.stringify(state));
+    return true;
   } catch {
-    // Navegação privada, armazenamento desabilitado ou cota esgotada.
+    // Keep the in-memory state available for export, but report the failed write.
+    return false;
   }
 }
 

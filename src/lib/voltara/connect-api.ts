@@ -1,5 +1,6 @@
 import {getCloudClient} from "./cloud-client";
 import {sealBytes,openBytes,sealMessage,mediaPath,type Envelope,type ChatPayload} from "./connect-crypto";
+import {olderMessageFilter} from "./connect-timeline";
 import {notifyConnectPush} from "./connect-push";
 import {enqueue,queued,acknowledge,type Queued} from "./connect-queue";
 
@@ -15,17 +16,22 @@ export async function loadPair(house:string):Promise<Pair|null>{
  if(typeof result.data!=="string"||result.data===user.id)return null;
  return {house,me:user.id,peer:result.data,scope:[house,...[user.id,result.data].sort()].join(":")+":"+user.id};
 }
-export async function listMessages(pair:Pair,before?:string){
+export async function listMessages(pair:Pair,before?:Pick<Envelope,"id"|"created_at">){
  const c=client();let query=c.from("voltara_chat_messages").select("*").eq("household_id",pair.house)
   .or("and(sender_id.eq."+pair.me+",recipient_id.eq."+pair.peer+"),and(sender_id.eq."+pair.peer+",recipient_id.eq."+pair.me+")")
   .order("created_at",{ascending:false}).order("id",{ascending:false}).limit(50);
- if(before)query=query.lt("created_at",before);
+ if(before)query=query.or(olderMessageFilter(before));
  const r=await query;if(r.error)throw r.error;return (r.data??[]) as Envelope[];
 }
 export async function listReceipts(pair:Pair,ids:string[]){
  if(!ids.length)return new Set<string>();
- const r=await client().from("voltara_chat_receipts").select("message_id").eq("household_id",pair.house).in("message_id",ids);
- if(r.error)throw r.error;return new Set<string>((r.data??[]).map(r=>r.message_id));
+ const unique=[...new Set(ids)], found=new Set<string>();
+ for(let start=0;start<unique.length;start+=100){
+  const r=await client().from("voltara_chat_receipts").select("message_id").eq("household_id",pair.house).in("message_id",unique.slice(start,start+100));
+  if(r.error)throw r.error;
+  for(const row of r.data??[])found.add(row.message_id);
+ }
+ return found;
 }
 export async function markRead(pair:Pair,rows:Envelope[]){
  const incoming=rows.filter(e=>e.recipient_id===pair.me);

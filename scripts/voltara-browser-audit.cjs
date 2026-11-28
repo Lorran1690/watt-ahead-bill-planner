@@ -2,7 +2,7 @@
 const { chromium } = require(process.env.VOLTARA_PLAYWRIGHT_ROOT + "/node_modules/playwright");
 const assert = require("node:assert/strict");
 const base = "http://127.0.0.1:4173";
-const routes = ["/","/gastos","/casa-3d","/aparelhos","/habitos","/contas","/agua","/simulador","/configuracoes","/compartilhar","/instalar","/financas"];
+const routes = ["/","/gastos","/casa-3d","/aparelhos","/habitos","/contas","/agua","/simulador","/configuracoes","/compartilhar","/instalar","/financas","/connect"];
 
 (async () => {
  const browser = await chromium.launch({headless:true});
@@ -17,6 +17,7 @@ const routes = ["/","/gastos","/casa-3d","/aparelhos","/habitos","/contas","/agu
     const res=await page.goto(base+path,{waitUntil:"domcontentloaded"});
     assert.equal(res.status(),200,path+" HTTP");
     await page.locator("#voltara-main").waitFor({state:"visible"});
+    await page.locator("#voltara-main > div > :not([aria-label='Carregando'])").first().waitFor({state:"visible"});
     await page.locator("#voltara-main").locator("text=Não foi possível carregar esta página").count().then(n=>assert.equal(n,0));
   }
   async function state() { return page.evaluate(()=>JSON.parse(localStorage.getItem("voltara:v1")||"null")); }
@@ -28,9 +29,10 @@ const routes = ["/","/gastos","/casa-3d","/aparelhos","/habitos","/contas","/agu
   await page.locator("form button[type=submit]").click();
   await page.waitForFunction(()=>JSON.parse(localStorage.getItem("voltara:v1")||"{}").expenses?.length===1);
   assert.equal((await state()).expenses[0].amount,17.9);
-  await page.reload();
+  await open("/gastos");
   await page.locator("#expense-filter").fill("2026-11");
-  await page.getByText("Auditoria local",{exact:true}).first().waitFor();
+  await page.locator("#voltara-main p").filter({hasText:/^Auditoria local/}).first().waitFor();
+  assert.equal((await state()).expenses[0].note,"Auditoria local");
   await page.getByRole("button",{name:"Editar gasto",exact:true}).click();
   await page.locator("#expense-amount").fill("21,50");
   await page.locator("form button[type=submit]").click();
@@ -63,14 +65,28 @@ const routes = ["/","/gastos","/casa-3d","/aparelhos","/habitos","/contas","/agu
   await page.waitForFunction(()=>JSON.parse(localStorage.getItem("voltara:v1")||"{}").expenses?.length===0);
   console.log("PASS: inclusão, edição, recarga, cômodo, água, luz, exportação e exclusão locais");
   for(const route of routes) await open(route);
-  console.log("PASS: 11 rotas desktop");
-  await page.setViewportSize({width:390,height:844});
-  for(const route of routes) {
-    await open(route);
-    const viewport=await page.evaluate(()=>({document:document.documentElement.scrollWidth,window:innerWidth}));
-    assert(viewport.document <= viewport.window+2,route+" overflow horizontal: "+JSON.stringify(viewport));
+  console.log(`PASS: ${routes.length} rotas desktop`);
+  for(const width of [320,360,390,414,768,1920]) {
+    await page.setViewportSize({width,height:width>=768?900:844});
+    for(const route of routes) {
+      await open(route);
+      await page.locator("#voltara-main > div > :not([aria-label='Carregando'])").first().waitFor({state:"visible"});
+      const viewport=await page.evaluate(()=>{
+        const main=document.getElementById("voltara-main");
+        return {document:document.documentElement.scrollWidth,window:innerWidth,mainScroll:main.scrollWidth,mainWidth:main.clientWidth};
+      });
+      assert(viewport.document <= viewport.window+2,route+" overflow horizontal em "+width+": "+JSON.stringify(viewport));
+      assert(viewport.mainScroll <= viewport.mainWidth+2,route+" conteúdo cortado em "+width+": "+JSON.stringify(viewport));
+    }
+    if(width<768){
+      await page.getByRole("button",{name:"Abrir menu completo"}).click();
+      const menu=page.getByRole("navigation",{name:"Todas as páginas do Voltara"});
+      await menu.waitFor({state:"visible"});
+      await menu.getByRole("link",{name:"Connect",exact:true}).click();
+      await page.waitForURL("**/connect");
+    }
+    console.log("PASS: "+routes.length+" rotas em "+width+"px");
   }
-  console.log("PASS: 11 rotas no viewport móvel");
   assert.deepEqual(errors,[],"Erros JavaScript não tratados");
   console.log("PASS: nenhum erro JavaScript não tratado");
  } finally { await browser.close(); }
