@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { DailyExpense } from "./types";
+import { isValidExpenseDate } from "./expenses";
 
 export const categories = ["Alimentação","Moradia","Transporte","Energia","Água","Saúde","Lazer","Educação","Outros"] as const;
 const category = z.enum(categories);
@@ -7,9 +8,7 @@ const id = z.string().min(1).max(80);
 const title = z.string().trim().min(1).max(120);
 const month = z.string().regex(/^20\d{2}-(0[1-9]|1[0-2])$/);
 export function validDate(value: string) {
-  if (!/^20\d{2}-\d{2}-\d{2}$/.test(value)) return false;
-  const d = new Date(value + "T12:00:00Z");
-  return Number.isFinite(d.getTime()) && d.toISOString().slice(0,10) === value;
+  return /^20\d{2}-/.test(value) && isValidExpenseDate(value);
 }
 const date = z.string().refine(validDate);
 const cents = z.number().int().min(1).max(100_000_000);
