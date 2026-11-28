@@ -10,3 +10,6 @@ describe("Scanner de comprovantes",()=>{
  });
  it("não preenche uma data impossível",()=>expect(receiptSuggestions("TOTAL 10,00\n31/02/2026").date).toBe(""));
 });
+it("reconhece o mesmo total repetido com separadores diferentes",()=>{
+ expect(receiptSuggestions("TOTAL 1234,50\nVALOR TOTAL 1234.50")).toMatchObject({amount:"1234,50",candidates:["1234,50"]});
+});
