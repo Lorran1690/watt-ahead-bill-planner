@@ -262,8 +262,8 @@ function ExpensesPage() {
                         <div className="min-w-0 flex-1">
                           <p className="whitespace-pre-wrap break-words text-sm">
                             {item.note.trim() || <span className="italic text-muted-foreground">Sem anotação</span>}
-                            {item.room && <span className="mt-1 block text-xs text-primary">{roomName(item.room)}</span>}
                           </p>
+                          {item.room && <p className="mt-1 block text-xs text-primary">{roomName(item.room)}</p>}
                           <p className="mt-1 text-sm font-semibold tabular">{money(item.amount)}</p>
                         </div>
                         <div className="flex shrink-0 flex-wrap gap-1">
