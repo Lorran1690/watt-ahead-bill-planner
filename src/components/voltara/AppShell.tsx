@@ -1,4 +1,5 @@
 import { Link, Outlet } from "@tanstack/react-router";
+import { useLocalPersistenceFailed } from "@/lib/voltara/store";
 import { useEffect, useState } from "react";
 import { cloudConfigured, getCloudClient } from "@/lib/voltara/cloud-client";
 import { disconnectAfterAuthLoss, findMyHousehold, startHouseholdSync, getCloudStatus, useCloudStatus } from "@/lib/voltara/cloud-sync";
@@ -99,6 +100,7 @@ export function AppShell() {
     return startFamilyPresence(sync.householdId);
   }, [hydrated, sync.householdId]);
   const unread = useConnectUnread(sync.householdId, hydrated);
+  const persistenceFailed = useLocalPersistenceFailed();
   const unreadBadge = (to: string) => to === "/connect" && unread > 0 ? <span aria-label={unread+" mensagens não lidas"} className="absolute -right-2 -top-1 rounded-full bg-primary px-1 min-w-4 text-center text-[10px] font-bold text-primary-foreground">{unread > 99 ? "99+" : unread}</span> : null;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   useEffect(() => {
@@ -173,6 +175,7 @@ export function AppShell() {
 
       <main id="voltara-main" className="min-w-0 px-3 pb-[calc(6.75rem+env(safe-area-inset-bottom))] pt-4 sm:px-4 sm:pt-5 md:ml-20 md:px-8 md:pb-12 md:pt-8 lg:ml-56">
         <div className="mx-auto min-w-0 max-w-6xl">
+          {persistenceFailed && <div role="alert" className="mb-4 break-words rounded-xl border border-destructive/50 bg-card p-3 text-sm text-foreground">Não foi possível gravar os dados no armazenamento deste aparelho. Exporte um backup em <Link to="/configuracoes" className="font-semibold underline">Ajustes</Link> antes de fechar ou atualizar.</div>}
           {hydrated ? <Outlet /> : <div className="h-64 animate-pulse rounded-2xl bg-card" aria-label="Carregando" />}
         </div>
       </main>
