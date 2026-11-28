@@ -81,7 +81,7 @@ function Conversation({pair}:{pair:Pair}){
  const pendingIds=useMemo(()=>{const confirmed=new Set(rows.map(r=>r.id));return new Set(outbox.filter(r=>!confirmed.has(r.id)).map(r=>r.id));},[rows,outbox]);
  const pending=pendingIds.size;
  const scrollRef=useRef<HTMLDivElement>(null),composerRef=useRef<HTMLTextAreaElement>(null),followBottom=useRef(true),forceBottom=useRef(false);
- const lockEpoch=useRef(0),flushAgain=useRef(false);
+ const lockEpoch=useRef(0),flushAgain=useRef(false),olderBusy=useRef(false);
  const [connected,setConnected]=useState(false);
  const [sending,setSending]=useState(false);
  const [typingAllowed,setTypingAllowed]=useState(false);
@@ -135,7 +135,7 @@ function Conversation({pair}:{pair:Pair}){
   }catch(e){report(e);}
  }
  function lock(){
-  unlocked.current=false;lockEpoch.current++;micEpoch.current++;setOutbox([]);setMicStarting(false);setVerified(false);stopRecording(true);setKey(null);setRows([]);setViews([]);setSecret("");setFingerprint("");setText("");setDraft(null);setScanFile(null);setReply(undefined);setFilter("");setSelectedExpense("");setRecording(false);setRead(new Set());seen.current.clear();known.current=null;decoded.current={key:null,messages:new Map()};
+  unlocked.current=false;lockEpoch.current++;micEpoch.current++;setOutbox([]);setMicStarting(false);setVerified(false);stopRecording(true);setKey(null);setRows([]);setViews([]);setOlderAvailable(true);setIsTyping(false);setSecret("");setFingerprint("");setText("");setDraft(null);setScanFile(null);setReply(undefined);setFilter("");setSelectedExpense("");setRecording(false);setRead(new Set());seen.current.clear();known.current=null;decoded.current={key:null,messages:new Map()};
  }
  async function refresh(){
   if(!alive.current||!unlocked.current||refreshBusy.current)return;
@@ -178,8 +178,8 @@ function Conversation({pair}:{pair:Pair}){
    .on("postgres_changes",{event:"INSERT",schema:"public",table:"voltara_chat_receipts",filter:"household_id=eq."+pair.house},onReceipt)
    .on("postgres_changes",{event:"*",schema:"public",table:"voltara_chat_typing",filter:"household_id=eq."+pair.house},onTyping)
    .subscribe(s=>{if(active&&s==="SUBSCRIBED"){onUpdate();onReceipt();onTyping();}});
-  const tick=()=>{if(active){void refresh();void flush();onReceipt();onTyping();}};
-  tick();const timer=window.setInterval(tick,5000);const typingTimer=window.setInterval(onTyping,3000);
+  const tick=()=>{if(active){void refresh();void flush();onReceipt();}};
+  tick();onTyping();const timer=window.setInterval(tick,5000);const typingTimer=window.setInterval(onTyping,3000);
   window.addEventListener("online",tick);
   return()=>{active=false;clearInterval(timer);clearInterval(typingTimer);window.removeEventListener("online",tick);void c.removeChannel(channel);};
  },[key,pair.scope]);
@@ -209,13 +209,17 @@ function Conversation({pair}:{pair:Pair}){
   return()=>{active=false};
  },[key,rows,pair.scope]);
  async function loadOlder(){
+  if(olderBusy.current||!unlocked.current)return;
+  const first=rows[0];if(!first?.created_at)return;
+  const generation=lockEpoch.current;
+  olderBusy.current=true;
   try{
-   const first=rows[0];if(!first?.created_at)return;
-   const older=await listMessages(pair,first.created_at);
-   if(!alive.current)return;
+   const older=await listMessages(pair,first);
+   if(!alive.current||!unlocked.current||generation!==lockEpoch.current)return;
    setOlderAvailable(older.length===50);
-   setRows(old=>[...new Map([...older,...old].map(e=>[e.id,e])).values()].sort((a,b)=>(a.created_at??"").localeCompare(b.created_at??"")||a.id.localeCompare(b.id)));
-  }catch(e){report(e);}
+   setRows(old=>mergeTimeline(old,older));
+  }catch(e){if(unlocked.current&&generation===lockEpoch.current)report(e);}
+  finally{olderBusy.current=false;}
  }
  async function send(e?:FormEvent,financial?:ChatPayload["financial"]){
   e?.preventDefault();if(!key||!verified||sending||recording||micStarting||(!text.trim()&&!draft&&!financial))return;
@@ -232,7 +236,8 @@ function Conversation({pair}:{pair:Pair}){
  }
  async function choosePhoto(file?:File){
   if(!file||!key||!verified)return;setError("");
-  try{const blob=await compressPhoto(file);if(alive.current&&unlocked.current)setDraft({blob,kind:"image",mime:"image/jpeg"});}catch(e){report(e);}
+  const generation=lockEpoch.current;
+  try{const blob=await compressPhoto(file);if(alive.current&&unlocked.current&&generation===lockEpoch.current)setDraft({blob,kind:"image",mime:"image/jpeg"});}catch(e){if(unlocked.current&&generation===lockEpoch.current)report(e);}
  }
  async function startRecording(){
   if(recording||micStarting||draft||!key||!verified)return;setError("");setMicStarting(true);const generation=++micEpoch.current;
