@@ -35,3 +35,8 @@ describe("Paginação Connect",()=>{
   expect(()=>olderMessageFilter({id:"aabbccdd-0000-4000-8000-001122334455",created_at:"invalid"})).toThrow();
  });
 });
+
+it("ordena timestamps equivalentes em formatos distintos e preserva microssegundos",()=>{
+ const rows=[{...base,id:"a",created_at:"2026-11-26T12:00:00.000002+00:00"},{...base,id:"z",created_at:"2026-11-26T12:00:00.000001Z"},{...base,id:"m",created_at:"2026-11-26T09:00:00-03:00"}];
+ expect(mergeTimeline([],rows).map(r=>r.id)).toEqual(["m","z","a"]);
+});
