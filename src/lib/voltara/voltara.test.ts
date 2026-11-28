@@ -85,6 +85,12 @@ describe("calibração", () => {
 });
 
 describe("persistência", () => {
+  it("sinaliza falha de gravação sem apagar dados em memória", () => {
+    const s=defaultState();
+    expect(saveState(null,s)).toBe(false);
+    expect(saveState({getItem:()=>null,setItem:()=>{throw Error("QuotaExceeded");}},s)).toBe(false);
+    expect(saveState(memKV(),s)).toBe(true);
+  });
   it("salva e carrega", () => {
     const kv = memKV();
     const s = defaultState();
